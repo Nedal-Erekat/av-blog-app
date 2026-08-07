@@ -1,0 +1,21 @@
+{
+  "name": "av-blog-app",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c blue,green \"npm run dev -w apps/web\" \"npm run dev -w apps/api\"",
+    "lint": "npm run lint -w apps/web && npm run lint -w apps/api",
+    "test": "npm run test -w apps/api && npm run test -w apps/web",
+    "build": "npm run build -w packages/shared --if-present && npm run build -w apps/api && npm run build -w apps/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
