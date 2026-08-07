@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { errorHandler } from './middleware/error-handler';
 import authRoutes from './routes/auth.routes';
+import postRoutes from './routes/post.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -28,6 +29,7 @@ export function createApp(): Express {
   });
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/posts', postRoutes);
 
   app.use(errorHandler);
 
