@@ -3,6 +3,8 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
+import { errorHandler } from './middleware/error-handler';
+import authRoutes from './routes/auth.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -24,6 +26,10 @@ export function createApp(): Express {
       res.status(503).json({ status: 'error', db: 'unreachable' });
     }
   });
+
+  app.use('/api/auth', authRoutes);
+
+  app.use(errorHandler);
 
   return app;
 }
