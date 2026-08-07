@@ -17,8 +17,8 @@ function deriveExcerpt(content: string): string {
 
 export function createPostService(repository: PostRepository = postRepository) {
   return {
-    listPosts() {
-      return repository.findMany();
+    listPosts(filter?: { authorId?: string }) {
+      return repository.findMany(filter);
     },
 
     async getPostBySlug(slug: string) {

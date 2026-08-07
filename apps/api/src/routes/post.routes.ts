@@ -9,8 +9,9 @@ const router = Router();
 
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const posts = await postService.listPosts();
+  asyncHandler(async (req, res) => {
+    const authorId = typeof req.query.authorId === 'string' ? req.query.authorId : undefined;
+    const posts = await postService.listPosts({ authorId });
     res.json({ posts });
   }),
 );

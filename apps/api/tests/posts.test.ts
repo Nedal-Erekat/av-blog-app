@@ -29,6 +29,21 @@ describe('GET /api/posts', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.posts)).toBe(true);
   });
+
+  it('filters by authorId when provided', async () => {
+    const agent = await registerAgent();
+    const createRes = await agent
+      .post('/api/posts')
+      .send({ title: 'Filtered Post', content: 'Only mine should show up.' });
+    const { post } = createRes.body;
+
+    const res = await request(app).get(`/api/posts?authorId=${post.authorId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.posts.every((p: { authorId: string }) => p.authorId === post.authorId)).toBe(true);
+    expect(res.body.posts.some((p: { id: string }) => p.id === post.id)).toBe(true);
+
+    await agent.delete(`/api/posts/${post.id}`);
+  });
 });
 
 describe('POST /api/posts', () => {

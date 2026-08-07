@@ -2,8 +2,11 @@ import type { Post, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 
 export const postRepository = {
-  findMany(): Promise<Post[]> {
-    return prisma.post.findMany({ orderBy: { createdAt: 'desc' } });
+  findMany(filter?: { authorId?: string }): Promise<Post[]> {
+    return prisma.post.findMany({
+      where: filter?.authorId ? { authorId: filter.authorId } : undefined,
+      orderBy: { createdAt: 'desc' },
+    });
   },
   findBySlug(slug: string): Promise<Post | null> {
     return prisma.post.findUnique({ where: { slug } });
