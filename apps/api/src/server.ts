@@ -1,9 +1,9 @@
+import 'dotenv/config';
 import { createApp } from './app';
-
-const PORT = process.env.PORT ?? 4000;
+import { env } from './config/env';
 
 const app = createApp();
 
-app.listen(PORT, () => {
-  console.log(`API listening on port ${PORT}`);
+app.listen(env.PORT, () => {
+  console.log(`API listening on port ${env.PORT}`);
 });

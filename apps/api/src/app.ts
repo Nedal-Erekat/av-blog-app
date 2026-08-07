@@ -1,21 +1,28 @@
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express, { type Express } from 'express';
+import { env } from './config/env';
+import { prisma } from './lib/prisma';
 
 export function createApp(): Express {
   const app = express();
 
   app.use(
     cors({
-      origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+      origin: env.FRONTEND_URL,
       credentials: true,
     }),
   );
   app.use(express.json());
   app.use(cookieParser());
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok' });
+  app.get('/api/health', async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: 'ok', db: 'connected' });
+    } catch {
+      res.status(503).json({ status: 'error', db: 'unreachable' });
+    }
   });
 
   return app;
