@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CommentSection } from './CommentSection';
 import { apiClient } from '@/lib/api-client';
@@ -23,29 +23,34 @@ beforeEach(() => {
 });
 
 describe('CommentSection', () => {
-  it('lists existing comments and hides the form when logged out', async () => {
+  it('lists existing comments and hides the form when logged out', () => {
     mockedUseAuth.mockReturnValue({ user: null });
-    mockedApiClient.get.mockResolvedValue({
-      comments: [{ id: 'c1', content: 'First!', authorId: 'u1', author: { id: 'u1', name: 'Alice' } }],
-    });
+    const initialComments = [
+      {
+        id: 'c1',
+        content: 'First!',
+        postId: 'p1',
+        authorId: 'u1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        author: { id: 'u1', name: 'Alice' },
+      },
+    ];
 
-    render(<CommentSection postId="p1" />);
+    render(<CommentSection postId="p1" initialComments={initialComments} />);
 
-    expect(await screen.findByText('First!')).toBeInTheDocument();
+    expect(screen.getByText('First!')).toBeInTheDocument();
     expect(screen.getByText('Alice')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Add a comment...')).not.toBeInTheDocument();
   });
 
   it('lets a logged-in user post a comment, which appears in the list', async () => {
     mockedUseAuth.mockReturnValue({ user: { id: 'u2' } });
-    mockedApiClient.get.mockResolvedValue({ comments: [] });
     mockedApiClient.post.mockResolvedValue({
       comment: { id: 'c2', content: 'Nice post!', authorId: 'u2', author: { id: 'u2', name: 'Bob' } },
     });
     const user = userEvent.setup();
 
-    render(<CommentSection postId="p1" />);
-    await waitFor(() => expect(mockedApiClient.get).toHaveBeenCalled());
+    render(<CommentSection postId="p1" initialComments={[]} />);
 
     await user.type(screen.getByPlaceholderText('Add a comment...'), 'Nice post!');
     await user.click(screen.getByRole('button', { name: 'Post comment' }));
@@ -54,18 +59,30 @@ describe('CommentSection', () => {
     expect(mockedApiClient.post).toHaveBeenCalledWith('/api/posts/p1/comments', { content: 'Nice post!' });
   });
 
-  it('only shows a delete control for the current user\'s own comments', async () => {
+  it('only shows a delete control for the current user\'s own comments', () => {
     mockedUseAuth.mockReturnValue({ user: { id: 'u2' } });
-    mockedApiClient.get.mockResolvedValue({
-      comments: [
-        { id: 'c1', content: 'Not mine', authorId: 'u1', author: { id: 'u1', name: 'Alice' } },
-        { id: 'c2', content: 'Mine', authorId: 'u2', author: { id: 'u2', name: 'Bob' } },
-      ],
-    });
+    const initialComments = [
+      {
+        id: 'c1',
+        content: 'Not mine',
+        postId: 'p1',
+        authorId: 'u1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        author: { id: 'u1', name: 'Alice' },
+      },
+      {
+        id: 'c2',
+        content: 'Mine',
+        postId: 'p1',
+        authorId: 'u2',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        author: { id: 'u2', name: 'Bob' },
+      },
+    ];
 
-    render(<CommentSection postId="p1" />);
+    render(<CommentSection postId="p1" initialComments={initialComments} />);
 
-    await screen.findByText('Mine');
+    screen.getByText('Mine');
     expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
   });
 });

@@ -1,23 +1,17 @@
 'use client';
 
 import { CreateCommentInputSchema } from '@av-blog/shared';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient, ApiError } from '@/lib/api-client';
 import type { Comment } from '@/lib/types';
 
-export function CommentSection({ postId }: { postId: string }) {
+export function CommentSection({ postId, initialComments }: { postId: string; initialComments: Comment[] }) {
   const { user } = useAuth();
-  const [comments, setComments] = useState<Comment[] | null>(null);
+  const [comments, setComments] = useState<Comment[]>(initialComments);
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    apiClient
-      .get<{ comments: Comment[] }>(`/api/posts/${postId}/comments`)
-      .then((res) => setComments(res.comments));
-  }, [postId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,7 +29,7 @@ export function CommentSection({ postId }: { postId: string }) {
         `/api/posts/${postId}/comments`,
         result.data,
       );
-      setComments((prev) => (prev ? [...prev, comment] : [comment]));
+      setComments((prev) => [...prev, comment]);
       setContent('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong');
@@ -47,12 +41,12 @@ export function CommentSection({ postId }: { postId: string }) {
   async function handleDelete(commentId: string) {
     if (!confirm('Delete this comment?')) return;
     await apiClient.delete(`/api/comments/${commentId}`);
-    setComments((prev) => prev?.filter((c) => c.id !== commentId) ?? null);
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
   }
 
   return (
     <section className="mt-10 border-t border-gray-200 pt-6">
-      <h2 className="text-lg font-semibold">Comments {comments ? `(${comments.length})` : ''}</h2>
+      <h2 className="text-lg font-semibold">Comments ({comments.length})</h2>
 
       {user && (
         <form onSubmit={handleSubmit} className="mt-4 space-y-2">
@@ -75,7 +69,7 @@ export function CommentSection({ postId }: { postId: string }) {
       )}
 
       <ul className="mt-6 space-y-4">
-        {comments?.map((comment) => (
+        {comments.map((comment) => (
           <li key={comment.id} className="border-b border-gray-100 pb-4">
             <p className="text-sm font-medium">{comment.author.name}</p>
             <p className="mt-1 text-gray-700">{comment.content}</p>

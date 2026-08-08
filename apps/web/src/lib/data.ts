@@ -1,6 +1,6 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { apiClient } from '@/lib/api-client';
-import type { Category, Post } from '@/lib/types';
+import type { Category, Comment, Post } from '@/lib/types';
 
 export async function getPosts(category?: string) {
   'use cache';
@@ -25,4 +25,12 @@ export async function getPost(slug: string) {
   cacheTag(`post:${slug}`);
   const { post } = await apiClient.get<{ post: Post }>(`/api/posts/${slug}`);
   return post;
+}
+
+export async function getComments(postId: string) {
+  'use cache';
+  cacheLife('minutes');
+  cacheTag(`comments:${postId}`);
+  const { comments } = await apiClient.get<{ comments: Comment[] }>(`/api/posts/${postId}/comments`);
+  return comments;
 }
