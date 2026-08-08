@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "lint": "eslint src",
     "test": "jest --runInBand",
+    "test:coverage": "jest --runInBand --coverage",
     "postinstall": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

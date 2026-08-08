@@ -8,11 +8,11 @@ export function Navbar() {
 
   return (
     <nav className="border-b border-gray-200">
-      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-y-2 px-4 py-3">
         <Link href="/" className="text-lg font-semibold">
           Avertra Blog
         </Link>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           {loading ? null : user ? (
             <>
               <Link href="/dashboard">My Posts</Link>
