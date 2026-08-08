@@ -6,7 +6,10 @@ import { AuthProvider } from '@/context/AuthContext';
 import { getInitialUser } from '@/lib/auth-server';
 
 export const metadata: Metadata = {
-  title: 'Avertra Blog',
+  title: {
+    default: 'Avertra Blog',
+    template: '%s | Avertra Blog',
+  },
   description: 'A full-stack blogging platform',
 };
 
