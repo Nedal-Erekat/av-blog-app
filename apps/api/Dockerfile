@@ -6,6 +6,9 @@ COPY apps/api ./apps/api
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/shared ./packages/shared
 
+# Ensure TypeScript base config is available for workspace package builds
+COPY tsconfig.base.json ./
+
 RUN npm ci
 RUN npm run build -w packages/shared && npm run build -w apps/api
 
