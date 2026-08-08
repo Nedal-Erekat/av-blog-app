@@ -1,5 +1,6 @@
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json ./
 COPY apps/api ./apps/api
@@ -15,6 +16,7 @@ RUN npm run build -w packages/shared && npm run build -w apps/api
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
