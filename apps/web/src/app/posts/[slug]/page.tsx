@@ -2,17 +2,15 @@ import { notFound } from 'next/navigation';
 import { CommentSection } from '@/components/CommentSection';
 import { LikeButton } from '@/components/LikeButton';
 import { PostOwnerActions } from '@/components/PostOwnerActions';
-import { apiClient, ApiError } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-client';
+import { getPost } from '@/lib/data';
 import type { Post } from '@/lib/types';
-
-export const dynamic = 'force-dynamic';
 
 export default async function PostDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   let post: Post;
   try {
-    const res = await apiClient.get<{ post: Post }>(`/api/posts/${slug}`);
-    post = res.post;
+    post = await getPost(slug);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       notFound();
