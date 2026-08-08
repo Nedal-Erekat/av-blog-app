@@ -1,19 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
 
-export function LikeButton({ postId, initialCount }: { postId: string; initialCount: number }) {
+export function LikeButton({
+  postId,
+  initialCount,
+  initialLiked,
+}: {
+  postId: string;
+  initialCount: number;
+  initialLiked: boolean;
+}) {
   const { user } = useAuth();
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    apiClient.get<{ liked: boolean }>(`/api/posts/${postId}/like`).then((res) => setLiked(res.liked));
-  }, [postId, user]);
 
   async function handleToggle() {
     if (!user || pending) return;
