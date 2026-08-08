@@ -1,9 +1,6 @@
 import Link from 'next/link';
 import { PostCard } from '@/components/PostCard';
-import { apiClient } from '@/lib/api-client';
-import type { Category, Post } from '@/lib/types';
-
-export const dynamic = 'force-dynamic';
+import { getCategories, getPosts } from '@/lib/data';
 
 export default async function HomePage({
   searchParams,
@@ -11,11 +8,7 @@ export default async function HomePage({
   searchParams: Promise<{ category?: string }>;
 }) {
   const { category: activeCategory } = await searchParams;
-  const categoryQuery = activeCategory ? `?category=${activeCategory}` : '';
-  const [{ posts }, { categories }] = await Promise.all([
-    apiClient.get<{ posts: Post[] }>(`/api/posts${categoryQuery}`),
-    apiClient.get<{ categories: Category[] }>('/api/categories'),
-  ]);
+  const [posts, categories] = await Promise.all([getPosts(activeCategory), getCategories()]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
