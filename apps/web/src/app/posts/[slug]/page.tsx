@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { CommentSection } from '@/components/CommentSection';
 import { LikeButton } from '@/components/LikeButton';
@@ -6,6 +7,23 @@ import { apiClient, ApiError } from '@/lib/api-client';
 import { getAuthCookieHeader, getInitialUser } from '@/lib/auth-server';
 import { getComments, getPost } from '@/lib/data';
 import type { Post } from '@/lib/types';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  try {
+    const post = await getPost(slug);
+    return {
+      title: post.title,
+      description: post.excerpt || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
 
 export default async function PostDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
