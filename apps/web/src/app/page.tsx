@@ -5,8 +5,13 @@ import type { Category, Post } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export default async function HomePage({ searchParams }: { searchParams: { category?: string } }) {
-  const categoryQuery = searchParams.category ? `?category=${searchParams.category}` : '';
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string }>;
+}) {
+  const { category: activeCategory } = await searchParams;
+  const categoryQuery = activeCategory ? `?category=${activeCategory}` : '';
   const [{ posts }, { categories }] = await Promise.all([
     apiClient.get<{ posts: Post[] }>(`/api/posts${categoryQuery}`),
     apiClient.get<{ categories: Category[] }>('/api/categories'),
@@ -18,14 +23,14 @@ export default async function HomePage({ searchParams }: { searchParams: { categ
 
       {categories.length > 0 && (
         <nav className="mt-4 flex flex-wrap gap-3 text-sm">
-          <Link href="/" className={!searchParams.category ? 'font-semibold underline' : 'text-gray-600'}>
+          <Link href="/" className={!activeCategory ? 'font-semibold underline' : 'text-gray-600'}>
             All
           </Link>
           {categories.map((category) => (
             <Link
               key={category.id}
               href={`/?category=${category.slug}`}
-              className={searchParams.category === category.slug ? 'font-semibold underline' : 'text-gray-600'}
+              className={activeCategory === category.slug ? 'font-semibold underline' : 'text-gray-600'}
             >
               {category.name}
             </Link>

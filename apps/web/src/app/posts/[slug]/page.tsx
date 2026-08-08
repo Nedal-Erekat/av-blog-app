@@ -7,10 +7,11 @@ import type { Post } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PostDetailPage({ params }: { params: { slug: string } }) {
+export default async function PostDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   let post: Post;
   try {
-    const res = await apiClient.get<{ post: Post }>(`/api/posts/${params.slug}`);
+    const res = await apiClient.get<{ post: Post }>(`/api/posts/${slug}`);
     post = res.post;
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
