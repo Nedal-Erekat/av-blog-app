@@ -1,37 +1,34 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { PostForm } from '@/components/PostForm';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
 import type { Post } from '@/lib/types';
 
-export default function EditPostPage({ params }: { params: { slug: string } }) {
+export default function EditPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
   const { user, loading } = useAuth();
   const router = useRouter();
   const [post, setPost] = useState<Post | null>(null);
-  const [notAllowed, setNotAllowed] = useState(false);
 
   useEffect(() => {
     apiClient
-      .get<{ post: Post }>(`/api/posts/${params.slug}`)
+      .get<{ post: Post }>(`/api/posts/${slug}`)
       .then((res) => setPost(res.post))
       .catch(() => router.push('/'));
-  }, [params.slug, router]);
+  }, [slug, router]);
 
   useEffect(() => {
-    if (loading || !post) return;
-    if (!user) {
+    if (!loading && !user) {
       router.push('/login');
-      return;
     }
-    if (post.authorId !== user.id) {
-      setNotAllowed(true);
-    }
-  }, [loading, user, post, router]);
+  }, [loading, user, router]);
 
-  if (!post || loading) return null;
+  if (!post || loading || !user) return null;
+
+  const notAllowed = post.authorId !== user.id;
 
   if (notAllowed) {
     return (
