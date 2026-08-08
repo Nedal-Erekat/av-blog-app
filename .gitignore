@@ -9,5 +9,6 @@ coverage/
 *.log
 .DS_Store
 .turbo/
+*.tsbuildinfo
 apps/api/prisma/dev.db
 apps/api/prisma/dev.db-journal

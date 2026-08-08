@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --runInBand",
     "test:coverage": "jest --runInBand --coverage",
     "postinstall": "prisma generate",
