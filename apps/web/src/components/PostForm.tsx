@@ -8,6 +8,7 @@ type PostFormValues = {
   title: string;
   content: string;
   excerpt: string;
+  category: string;
 };
 
 type PostFormProps = {
@@ -18,7 +19,7 @@ type PostFormProps = {
 
 export function PostForm({ initialValues, submitLabel, onSubmit }: PostFormProps) {
   const [form, setForm] = useState<PostFormValues>(
-    initialValues ?? { title: '', content: '', excerpt: '' },
+    initialValues ?? { title: '', content: '', excerpt: '', category: '' },
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +32,7 @@ export function PostForm({ initialValues, submitLabel, onSubmit }: PostFormProps
       title: form.title,
       content: form.content,
       excerpt: form.excerpt.trim() ? form.excerpt : undefined,
+      category: form.category.trim() ? form.category : undefined,
     });
     if (!result.success) {
       setError(result.error.errors[0]?.message ?? 'Invalid input');
@@ -71,6 +73,19 @@ export function PostForm({ initialValues, submitLabel, onSubmit }: PostFormProps
           value={form.excerpt}
           onChange={(e) => setForm({ ...form, excerpt: e.target.value })}
           className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+        />
+      </div>
+      <div>
+        <label htmlFor="category" className="block text-sm font-medium">
+          Category (optional)
+        </label>
+        <input
+          id="category"
+          type="text"
+          value={form.category}
+          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          className="mt-1 w-full rounded border border-gray-300 px-3 py-2"
+          placeholder="e.g. Engineering"
         />
       </div>
       <div>

@@ -46,7 +46,12 @@ export default function EditPostPage({ params }: { params: { slug: string } }) {
       <h1 className="text-2xl font-bold">Edit Post</h1>
       <div className="mt-6">
         <PostForm
-          initialValues={{ title: post.title, content: post.content, excerpt: post.excerpt }}
+          initialValues={{
+            title: post.title,
+            content: post.content,
+            excerpt: post.excerpt,
+            category: post.category?.name ?? '',
+          }}
           submitLabel="Save changes"
           onSubmit={async (input) => {
             const { post: updated } = await apiClient.patch<{ post: Post }>(`/api/posts/${post.id}`, input);

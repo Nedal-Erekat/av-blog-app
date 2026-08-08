@@ -11,6 +11,8 @@ const post: Post = {
   authorId: 'author-1',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
+  category: null,
+  _count: { comments: 0, likes: 0 },
 };
 
 describe('PostCard', () => {

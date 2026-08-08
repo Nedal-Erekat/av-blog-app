@@ -4,6 +4,7 @@ export const CreatePostInputSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
   content: z.string().min(1, 'Content is required'),
   excerpt: z.string().max(300).optional(),
+  category: z.string().min(1).max(50).optional(),
 });
 export type CreatePostInput = z.infer<typeof CreatePostInputSchema>;
 

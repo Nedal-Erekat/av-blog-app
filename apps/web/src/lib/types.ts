@@ -5,6 +5,21 @@ export type PublicUser = {
   createdAt: string;
 };
 
+export type Category = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type Comment = {
+  id: string;
+  content: string;
+  postId: string;
+  authorId: string;
+  createdAt: string;
+  author: { id: string; name: string };
+};
+
 export type Post = {
   id: string;
   title: string;
@@ -14,4 +29,6 @@ export type Post = {
   authorId: string;
   createdAt: string;
   updatedAt: string;
+  category: Category | null;
+  _count: { comments: number; likes: number };
 };
