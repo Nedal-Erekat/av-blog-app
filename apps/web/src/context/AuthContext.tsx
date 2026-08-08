@@ -15,16 +15,24 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<PublicUser | null>(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({
+  children,
+  initialUser,
+}: {
+  children: ReactNode;
+  initialUser?: PublicUser | null;
+}) {
+  const [user, setUser] = useState<PublicUser | null>(initialUser ?? null);
+  const [loading, setLoading] = useState(initialUser === undefined);
 
   useEffect(() => {
+    if (initialUser !== undefined) return;
     apiClient
       .get<{ user: PublicUser }>('/api/auth/me')
       .then((res) => setUser(res.user))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = useCallback(async (input: LoginInput) => {

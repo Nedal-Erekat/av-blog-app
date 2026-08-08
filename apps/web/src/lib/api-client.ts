@@ -36,7 +36,7 @@ async function request<T = unknown>(path: string, options: RequestInit = {}): Pr
 }
 
 export const apiClient = {
-  get: <T = unknown>(path: string) => request<T>(path, { method: 'GET' }),
+  get: <T = unknown>(path: string, options?: RequestInit) => request<T>(path, { method: 'GET', ...options }),
   post: <T = unknown>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined }),
   patch: <T = unknown>(path: string, data?: unknown) =>
