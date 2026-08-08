@@ -56,11 +56,29 @@ docs/       system design and design pattern write-ups
 
 ## Setup (Docker Compose)
 
-No Docker on the machine this was built on, so this path is written correctly but not build-verified locally — check it on a Docker-capable machine before relying on it:
+1. Create the Docker env files (separate from `apps/*/.env`, since Compose needs container-network values like `DATABASE_URL=postgresql://postgres:postgres@postgres:5432/...`, not `localhost`):
+   ```bash
+   apps/api/.env.docker
+   apps/web/.env.docker
+   ```
+   `apps/api/.env.docker`:
+   ```
+   PORT=4000
+   NODE_ENV=production
+   DATABASE_URL=postgresql://postgres:postgres@postgres:5432/av_blog?schema=public
+   JWT_SECRET=docker-compose-dev-secret-change-me
+   FRONTEND_URL=http://localhost:3000
+   ```
+   `apps/web/.env.docker`:
+   ```
+   NEXT_PUBLIC_API_URL=http://localhost:4000
+   ```
+   Both are gitignored — `docker-compose.yml` loads them via `env_file`.
 
-```bash
-docker-compose up --build
-```
+2. Build and run:
+   ```bash
+   docker-compose up --build
+   ```
 
 This runs `web`, `api`, and a local `postgres` container together, applying migrations automatically on API startup. Web at http://localhost:3000, API at http://localhost:4000.
 

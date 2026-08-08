@@ -6,6 +6,7 @@ coverage/
 .env
 .env.local
 .env.*.local
+.env.docker
 *.log
 .DS_Store
 .turbo/

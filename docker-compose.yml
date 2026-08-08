@@ -23,12 +23,8 @@ services:
     restart: unless-stopped
     ports:
       - '4000:4000'
-    environment:
-      PORT: 4000
-      NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/av_blog?schema=public
-      JWT_SECRET: docker-compose-dev-secret-change-me
-      FRONTEND_URL: http://localhost:3000
+    env_file:
+      - apps/api/.env.docker
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,8 +37,8 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
+    env_file:
+      - apps/web/.env.docker
     depends_on:
       - api
 
