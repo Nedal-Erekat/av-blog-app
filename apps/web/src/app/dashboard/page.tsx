@@ -1,41 +1,17 @@
-'use client';
-
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { redirect } from 'next/navigation';
+import { DashboardPostActions } from '@/components/DashboardPostActions';
 import { apiClient } from '@/lib/api-client';
+import { getInitialUser } from '@/lib/auth-server';
 import type { Post } from '@/lib/types';
 
-export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-  const [posts, setPosts] = useState<Post[] | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [loading, user, router]);
-
-  useEffect(() => {
-    if (!user) return;
-    apiClient.get<{ posts: Post[] }>(`/api/posts?authorId=${user.id}`).then((res) => setPosts(res.posts));
-  }, [user]);
-
-  async function handleDelete(post: Post) {
-    if (!confirm(`Delete "${post.title}"? This cannot be undone.`)) return;
-    setDeletingId(post.id);
-    try {
-      await apiClient.delete(`/api/posts/${post.id}`);
-      setPosts((prev) => prev?.filter((p) => p.id !== post.id) ?? null);
-    } finally {
-      setDeletingId(null);
-    }
+export default async function DashboardPage() {
+  const user = await getInitialUser();
+  if (!user) {
+    redirect('/login');
   }
 
-  if (loading || !user || !posts) return null;
+  const { posts } = await apiClient.get<{ posts: Post[] }>(`/api/posts?authorId=${user.id}`);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
@@ -58,14 +34,7 @@ export default function DashboardPage() {
                 <Link href={`/posts/${post.slug}/edit`} className="text-gray-600 hover:text-gray-900">
                   Edit
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(post)}
-                  disabled={deletingId === post.id}
-                  className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                >
-                  Delete
-                </button>
+                <DashboardPostActions postId={post.id} title={post.title} />
               </div>
             </li>
           ))}
