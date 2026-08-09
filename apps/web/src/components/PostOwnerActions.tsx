@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
+import { revalidatePost } from '@/lib/actions';
 
 type PostOwnerActionsProps = {
   postId: string;
@@ -24,6 +25,7 @@ export function PostOwnerActions({ postId, authorId, slug }: PostOwnerActionsPro
     setDeleting(true);
     try {
       await apiClient.delete(`/api/posts/${postId}`);
+      await revalidatePost(slug);
       router.push('/dashboard');
       router.refresh();
     } finally {

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { revalidatePostsList } from '@/lib/actions';
 
 export function DashboardPostActions({ postId, title }: { postId: string; title: string }) {
   const router = useRouter();
@@ -13,6 +14,7 @@ export function DashboardPostActions({ postId, title }: { postId: string; title:
     setDeleting(true);
     try {
       await apiClient.delete(`/api/posts/${postId}`);
+      await revalidatePostsList();
       router.refresh();
     } finally {
       setDeleting(false);

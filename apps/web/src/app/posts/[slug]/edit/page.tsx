@@ -5,6 +5,7 @@ import { use, useEffect, useState } from 'react';
 import { PostForm } from '@/components/PostForm';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
+import { revalidatePost } from '@/lib/actions';
 import type { Post } from '@/lib/types';
 
 export default function EditPostPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -52,6 +53,7 @@ export default function EditPostPage({ params }: { params: Promise<{ slug: strin
           submitLabel="Save changes"
           onSubmit={async (input) => {
             const { post: updated } = await apiClient.patch<{ post: Post }>(`/api/posts/${post.id}`, input);
+            await revalidatePost(updated.slug);
             router.push(`/posts/${updated.slug}`);
             router.refresh();
           }}
