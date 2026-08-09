@@ -3,7 +3,7 @@
 Full-stack blogging platform monorepo built for the Avertra Senior JavaScript Engineer assessment.
 
 - Frontend: Next.js 14 (App Router) + Tailwind, Context API for auth state
-- Backend: Express + Prisma REST API, PostgreSQL (Neon)
+- Backend: Express + Prisma REST API, PostgreSQL (Supabase)
 - Auth: JWT in an httpOnly cookie
 - Design pattern: Repository (data access) + Singleton (Prisma client) — see [`docs/design-pattern.md`](docs/design-pattern.md)
 - Architecture: see [`docs/system-design.md`](docs/system-design.md)
@@ -22,7 +22,7 @@ docs/       system design and design pattern write-ups
 ## Prerequisites
 
 - Node.js 20+
-- A PostgreSQL database (a free [Neon](https://neon.tech) project works well) — or use the Docker Compose setup below, which provisions Postgres for you
+- A PostgreSQL database (a free [Supabase](https://supabase.com) project works well — it gives you both a pooled and a direct connection string, which Prisma needs, see below) — or use the Docker Compose setup below, which provisions Postgres for you
 
 ## Setup (local, without Docker)
 
@@ -38,7 +38,15 @@ docs/       system design and design pattern write-ups
    cp apps/web/.env.example apps/web/.env
    ```
    Edit `apps/api/.env`:
-   - `DATABASE_URL` — your Postgres connection string
+   - `DATABASE_URL` — your app's runtime connection string, through Supabase's **pooled** (PgBouncer, transaction-mode) endpoint, port `6543`, with `?pgbouncer=true`:
+     ```
+     postgresql://postgres.<project-ref>:<password>@<region>.pooler.supabase.com:6543/postgres?pgbouncer=true
+     ```
+   - `DIRECT_URL` — a **direct** (non-pooled) connection, port `5432`, used only for running migrations (PgBouncer's transaction mode can't run the DDL Prisma migrations need):
+     ```
+     postgresql://postgres.<project-ref>:<password>@<region>.pooler.supabase.com:5432/postgres
+     ```
+     Both strings are on your Supabase project's Database settings page. `schema.prisma`'s `datasource` block already wires `url` to `DATABASE_URL` and `directUrl` to `DIRECT_URL` — Prisma picks the right one automatically depending on whether it's running a query or a migration.
    - `JWT_SECRET` — any long random string (e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
    - `PORT`, `FRONTEND_URL` — defaults work for local dev
 
@@ -46,6 +54,7 @@ docs/       system design and design pattern write-ups
    ```bash
    npm run prisma:migrate -w apps/api
    ```
+   This applies every migration in `apps/api/prisma/migrations/` to your database (via `DIRECT_URL`). In production, use `npx prisma migrate deploy` (no schema drift prompts) instead of `migrate dev`.
 
 4. Start both apps:
    ```bash
@@ -66,9 +75,11 @@ docs/       system design and design pattern write-ups
    PORT=4000
    NODE_ENV=production
    DATABASE_URL=postgresql://postgres:postgres@postgres:5432/av_blog?schema=public
+   DIRECT_URL=postgresql://postgres:postgres@postgres:5432/av_blog?schema=public
    JWT_SECRET=docker-compose-dev-secret-change-me
    FRONTEND_URL=http://localhost:3000
    ```
+   The Compose Postgres container has no pooler, so `DATABASE_URL` and `DIRECT_URL` are the same value here — the pooled/direct split only matters against Supabase.
    `apps/web/.env.docker`:
    ```
    NEXT_PUBLIC_API_URL=http://localhost:4000
@@ -112,7 +123,7 @@ To activate deploys, add these repo secrets under Settings → Secrets and varia
 | `VERCEL_PROJECT_ID` | Vercel project → Settings → General |
 | `RENDER_DEPLOY_HOOK_URL` | Render service → Settings → Deploy Hook |
 
-On Render, set the service's build/start commands to `npm ci && npm run build -w packages/shared && npm run build -w apps/api` / `npm start -w apps/api`, and set the same environment variables as `apps/api/.env` (with `DATABASE_URL` pointing at your production Postgres and `FRONTEND_URL` pointing at your deployed Vercel URL).
+On Render, set the service's build/start commands to `npm ci && npm run build -w packages/shared && npm run build -w apps/api` / `npm start -w apps/api`, and set the same environment variables as `apps/api/.env` (`DATABASE_URL` + `DIRECT_URL` pointing at your production Postgres, and `FRONTEND_URL` pointing at your deployed Vercel URL).
 
 ## Seeding
 

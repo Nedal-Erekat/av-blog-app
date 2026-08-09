@@ -76,7 +76,7 @@ export default function LoginPage() {
         </button>
       </form>
       <p className="mt-4 text-sm text-gray-600">
-        No account?{' '}
+        No account?
         <Link href="/register" className="underline">
           Register
         </Link>

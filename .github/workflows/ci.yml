@@ -49,6 +49,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/av_blog_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/av_blog_test
       JWT_SECRET: ci-test-secret-change-in-real-deployments
       FRONTEND_URL: http://localhost:3000
       NODE_ENV: test
