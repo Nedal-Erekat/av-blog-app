@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
 import { AuthProvider } from '@/context/AuthContext';
-import { getInitialUser } from '@/lib/auth-server';
+import { getOptionalUser } from '@/lib/dal';
 
 export const metadata: Metadata = {
   title: {
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 async function AuthedApp({ children }: { children: React.ReactNode }) {
-  const initialUser = await getInitialUser();
+  const initialUser = await getOptionalUser();
 
   return (
     <AuthProvider initialUser={initialUser}>

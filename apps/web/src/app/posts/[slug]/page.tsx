@@ -3,8 +3,8 @@ import { notFound } from 'next/navigation';
 import { CommentSection } from '@/components/CommentSection';
 import { LikeButton } from '@/components/LikeButton';
 import { PostOwnerActions } from '@/components/PostOwnerActions';
-import { apiClient, ApiError } from '@/lib/api-client';
-import { getAuthCookieHeader, getInitialUser } from '@/lib/auth-server';
+import { ApiError } from '@/lib/api-client';
+import { getLikeStatus, isPostAuthor } from '@/lib/dal';
 import { getComments, getPost } from '@/lib/data';
 import type { Post } from '@/lib/types';
 
@@ -37,17 +37,11 @@ export default async function PostDetailPage({ params }: { params: Promise<{ slu
     throw err;
   }
 
-  const [comments, user] = await Promise.all([getComments(post.id), getInitialUser()]);
-
-  let initialLiked = false;
-  if (user) {
-    const cookieHeader = await getAuthCookieHeader();
-    const { liked } = await apiClient.get<{ liked: boolean }>(`/api/posts/${post.id}/like`, {
-      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
-      cache: 'no-store',
-    });
-    initialLiked = liked;
-  }
+  const [comments, initialLiked, canManage] = await Promise.all([
+    getComments(post.id),
+    getLikeStatus(post.id),
+    isPostAuthor(post.authorId),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
@@ -56,7 +50,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ slu
         {new Date(post.createdAt).toLocaleDateString()}
         {post.category ? ` · ${post.category.name}` : ''}
       </p>
-      <PostOwnerActions postId={post.id} authorId={post.authorId} slug={post.slug} />
+      {canManage && <PostOwnerActions postId={post.id} slug={post.slug} />}
       <div className="mt-4">
         <LikeButton postId={post.id} initialCount={post._count.likes} initialLiked={initialLiked} />
       </div>

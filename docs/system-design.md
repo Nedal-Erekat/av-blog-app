@@ -125,6 +125,54 @@ posts" needs the post loaded to be checked at all. Keeping it in `updatePost`/`d
 rule is enforced wherever those are called from, and it's tested with a mock repository, no HTTP
 involved.
 
+### The Data Access Layer (web side)
+
+The web app's auth checks live in one module, `apps/web/src/lib/dal.ts`, and nowhere else. This
+mirrors what the API does with services and repositories: put the rule next to the data, so callers
+can't skip it.
+
+`verifySession()` reads the cookie, has the API verify the token, and either returns the user or
+`redirect()`s to `/login`. Every authenticated read is built on top of it:
+
+| DAL function | Guarantee |
+|---|---|
+| `getOptionalUser()` | user or `null` — never redirects; for UI that's valid logged out |
+| `verifySession()` | a verified user, or a redirect to `/login` |
+| `getMyPosts()` | calls `verifySession()`, then returns only that user's posts |
+| `getPostForEdit(slug)` | session **and** ownership; sends non-authors back to the post |
+| `getLikeStatus(postId)` | the current user's like state, `false` when logged out |
+
+Pages are then pure rendering. `/posts/new` is `await verifySession()` and a form; `/dashboard` is
+`await getMyPosts()` and a list; the edit page is `await getPostForEdit(slug)` and a form. None of
+them inspect the session to decide what to show or where to send someone — reaching the render means
+the check already passed.
+
+Three properties fall out of that:
+
+- **Checks can't be forgotten.** A new page, server action, or route handler that calls
+  `getMyPosts()` is authorized whether or not its author thought about auth. A guard written in a
+  page protects only that page.
+- **`import 'server-only'`** at the top of the DAL turns importing it from a client component into a
+  build error instead of a bundle leak.
+- **React's `cache()`** wraps each function, so a render pass that needs the user in the layout, the
+  page, and a nested component still makes one `/api/auth/me` call.
+
+**Why not `proxy.ts`** (Next 16's rename of `middleware.ts`): it can't be the real check. It runs in
+the edge runtime, where `jsonwebtoken`'s Node crypto isn't available, so it could only confirm a
+cookie *exists*, not that it's valid — and it protects exactly the paths its `matcher` lists, which
+is a second place to keep in sync with reality. Next's own docs put the line here: proxy "should not
+be used as a full session management or authorization solution... the majority of security checks
+should be performed as close as possible to your data source."
+
+**Why not in the components**: an auth check in a page is invisible to the next page, and one in a
+client component is a `useEffect` that redirects after a blank first frame — plus, on the edit page,
+a fetch waterfall that waits for the auth context before it even requests the post.
+
+All of this is still **UX, not the security boundary**. Every DAL check is redundant with
+`requireAuth` and the service-layer ownership checks in the API — `curl` skips the web app entirely
+and the API refuses it anyway. What the DAL buys is never rendering a form whose submit is
+guaranteed to come back 403.
+
 ### Why the web app proxies `/api/*`
 
 Web (`*.vercel.app`) and API (`*.onrender.com`) are different registrable domains in production.
@@ -135,8 +183,8 @@ So `next.config.js` rewrites `/api/:path*` to the API, and `apps/web/src/lib/api
 `BASE_URL = ''` in the browser. Every browser request goes to the web app's own origin and is
 proxied server-side to the API. The auth cookie is first-party to the only domain the browser talks
 to. Server-side code (RSC, server actions) isn't subject to cookie policy and calls the API
-directly, forwarding the cookie header explicitly when it needs to
-(`getInitialUser` in `lib/auth-server.ts`).
+directly, forwarding the cookie header explicitly when it needs to (`readAuthCookie` in
+`lib/dal.ts`).
 
 One consequence worth knowing: because Next inlines `NEXT_PUBLIC_*` and serializes rewrites into the
 routes manifest at build time, the API URL is fixed when the image is built, not when it starts.
@@ -155,10 +203,25 @@ That's why the Docker Compose setup passes it as a build arg.
   logout and never in between. Context is the proportionate tool. If this app grew optimistic
   cross-page mutations, that judgement would flip.
 
+The client/server split follows from that: pages are server components, and `'use client'` starts as
+deep in the tree as it can. `/posts/new` and `/posts/[slug]/edit` are server components that fetch
+and authorize, then hand a plain object to a thin client leaf (`NewPostForm`, `EditPostForm`) that
+exists only to own form state and the submit handler. The interactive parts are client components
+because they have to be; nothing above them is.
+
 The auth state avoids the usual flash of logged-out UI: the root layout resolves the user on the
-server (`getInitialUser`) and passes it to `AuthProvider` as `initialUser`, so the first paint is
-already correct. The client-side `/api/auth/me` fetch only runs when no server-rendered value was
-provided.
+server with the DAL's `getOptionalUser()` and passes it to `AuthProvider` as `initialUser`, so the
+first paint is already correct. The client-side `/api/auth/me` fetch only runs when no
+server-rendered value was provided.
+
+That also settles where client components get identity from. They can't import the DAL —
+`server-only` makes that a build error — so the session is resolved once on the server and handed
+down through the provider, which is the arrangement Next's auth guide recommends. What client
+components do with it is limited to *affordances*: the navbar swapping "Log in" for "Log out",
+`LikeButton` knowing whether to prompt a login, `CommentSection` showing a delete button next to a
+comment you just wrote. Resource authorization is not decided there — `PostOwnerActions` renders
+only when the DAL's `isPostAuthor()` says so, and the API re-checks ownership on every mutating
+request regardless.
 
 Caching uses Next's `'use cache'` with tags: `getPosts` is tagged `posts`, `getPost(slug)` is tagged
 `post:${slug}`. After a mutation, a server action calls `updateTag('posts')` — so a new post

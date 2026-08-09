@@ -1,17 +1,9 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { DashboardPostActions } from '@/components/DashboardPostActions';
-import { apiClient } from '@/lib/api-client';
-import { getInitialUser } from '@/lib/auth-server';
-import type { Post } from '@/lib/types';
+import { getMyPosts } from '@/lib/dal';
 
 export default async function DashboardPage() {
-  const user = await getInitialUser();
-  if (!user) {
-    redirect('/login');
-  }
-
-  const { posts } = await apiClient.get<{ posts: Post[] }>(`/api/posts?authorId=${user.id}`);
+  const posts = await getMyPosts();
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">

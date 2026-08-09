@@ -1,38 +1,19 @@
-'use client';
+import type { Metadata } from 'next';
+import { NewPostForm } from '@/components/NewPostForm';
+import { verifySession } from '@/lib/dal';
 
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { PostForm } from '@/components/PostForm';
-import { useAuth } from '@/context/AuthContext';
-import { apiClient } from '@/lib/api-client';
-import { revalidatePostsList } from '@/lib/actions';
-import type { Post } from '@/lib/types';
+export const metadata: Metadata = {
+  title: 'New Post',
+};
 
-export default function NewPostPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [loading, user, router]);
-
-  if (loading || !user) return null;
+export default async function NewPostPage() {
+  await verifySession();
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
       <h1 className="text-2xl font-bold">New Post</h1>
       <div className="mt-6">
-        <PostForm
-          submitLabel="Publish"
-          onSubmit={async (input) => {
-            const { post } = await apiClient.post<{ post: Post }>('/api/posts', input);
-            await revalidatePostsList();
-            router.push(`/posts/${post.slug}`);
-            router.refresh();
-          }}
-        />
+        <NewPostForm />
       </div>
     </main>
   );

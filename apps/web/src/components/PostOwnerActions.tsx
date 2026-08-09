@@ -3,22 +3,19 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
 import { revalidatePost } from '@/lib/actions';
 
 type PostOwnerActionsProps = {
   postId: string;
-  authorId: string;
   slug: string;
 };
 
-export function PostOwnerActions({ postId, authorId, slug }: PostOwnerActionsProps) {
-  const { user } = useAuth();
+// Rendered only when the DAL has already confirmed the viewer is the author —
+// this component makes no authorization decision of its own.
+export function PostOwnerActions({ postId, slug }: PostOwnerActionsProps) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
-
-  if (!user || user.id !== authorId) return null;
 
   async function handleDelete() {
     if (!confirm('Delete this post? This cannot be undone.')) return;
