@@ -8,6 +8,13 @@ Full-stack blogging platform monorepo built for the Avertra Senior JavaScript En
 - Design pattern: Repository (data access) + Singleton (Prisma client) — see [`docs/design-pattern.md`](docs/design-pattern.md)
 - Architecture: see [`docs/system-design.md`](docs/system-design.md)
 
+## Live Demo
+
+- Web: https://av-blog-app-web-nine.vercel.app/
+- API: https://av-blog-app.onrender.com/api/health
+
+Both are on free tiers. The API (Render) spins down after 15 minutes of inactivity — the first request after idle takes ~30-50s to wake it back up before responding.
+
 ## Structure
 
 ```
@@ -111,19 +118,23 @@ npm run typecheck
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` — runs on every push/PR to `main`: lint, typecheck, backend tests against a Postgres service container, frontend tests, and a full build.
-- `.github/workflows/deploy.yml` — runs after CI succeeds on `main`: deploys `apps/web` to Vercel and triggers a deploy hook for `apps/api` on Render.
+- `.github/workflows/ci.yml` — runs on every push/PR to `main`, split into separate per-app jobs so backend and frontend run on their own runners: `lint-api`/`lint-web` (lint + typecheck), `test-api`/`test-web` (`test-api` runs against a Postgres service container), `build-api`/`build-web` (each gated on its own lint+test jobs passing).
+- `.github/workflows/deploy.yml` — triggered by `ci.yml` completing successfully on `main` (`workflow_run`): deploys `apps/web` to Vercel and triggers a deploy hook for `apps/api` on Render.
 
-To activate deploys, add these repo secrets under Settings → Secrets and variables → Actions:
+Repo secrets (Settings → Secrets and variables → Actions) — all four are configured:
 
 | Secret | Where to get it |
 |---|---|
 | `VERCEL_TOKEN` | Vercel → Account Settings → Tokens |
-| `VERCEL_ORG_ID` | Vercel project → Settings → General |
-| `VERCEL_PROJECT_ID` | Vercel project → Settings → General |
+| `VERCEL_ORG_ID` | Vercel → **account** Settings → General → Team ID (not the project page — personal accounts have one too, Vercel treats them as an implicit team). If it's not visible there, run `npx vercel link` from `apps/web` and read it out of the generated `.vercel/project.json`. |
+| `VERCEL_PROJECT_ID` | Vercel project → Settings → General, or the same `.vercel/project.json` from `vercel link` |
 | `RENDER_DEPLOY_HOOK_URL` | Render service → Settings → Deploy Hook |
 
-On Render, set the service's build/start commands to `npm ci && npm run build -w packages/shared && npm run build -w apps/api` / `npm start -w apps/api`, and set the same environment variables as `apps/api/.env` (`DATABASE_URL` + `DIRECT_URL` pointing at your production Postgres, and `FRONTEND_URL` pointing at your deployed Vercel URL).
+On Render, set the service's build/start commands to `npm ci && npm run build -w apps/api` / `npm start -w apps/api` (leave **Root Directory** unset so the npm workspace `-w` commands run from the repo root — `npm ci` triggers the root `postinstall`, which builds `packages/shared` automatically), and set the same environment variables as `apps/api/.env` (`DATABASE_URL` + `DIRECT_URL` pointing at your production Postgres, and `FRONTEND_URL` pointing at your deployed Vercel URL).
+
+On Vercel, set **Root Directory** to `apps/web` and leave Install/Build Command on their auto-detected defaults — Vercel's own npm-workspaces monorepo detection handles building `packages/shared` first. Overriding those commands manually (e.g. `cd ../.. && npm ci`) can fight that detection and produce a "No Next.js version detected" build failure even though `next` is correctly listed in `apps/web/package.json`.
+
+**Heads up on double-deploys**: Vercel and Render both auto-deploy on push to `main` through their own native GitHub integration, independent of `deploy.yml`. That means a push may already be live before `ci.yml`/`deploy.yml` even finish running — the native integration isn't gated on tests passing. If you want deploys to only happen after CI is green, disable native auto-deploy on both platforms (Vercel: Project → Settings → Git; Render: Service → Settings → Auto-Deploy → No) and rely solely on `deploy.yml`.
 
 ## Seeding
 
