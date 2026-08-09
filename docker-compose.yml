@@ -28,12 +28,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "npx prisma migrate deploy && npm start"
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm start"
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://api:4000
     restart: unless-stopped
     ports:
       - '3000:3000'

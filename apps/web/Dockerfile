@@ -11,6 +11,13 @@ COPY packages/shared ./packages/shared
 COPY tsconfig.base.json ./
 
 RUN npm ci
+
+# Baked into the build, not read at runtime: Next inlines NEXT_PUBLIC_* into the
+# bundle and serializes next.config.js rewrites into the routes manifest during
+# `next build`. Inside Compose the API is reachable as `api:4000`, not localhost.
+ARG NEXT_PUBLIC_API_URL=http://api:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build -w packages/shared && npm run build -w apps/web
 
 FROM node:20-alpine AS runner
