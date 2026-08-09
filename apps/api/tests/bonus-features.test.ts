@@ -105,8 +105,10 @@ describe('Comments', () => {
   });
 
   it('adds and lists comments, and blocks deleting a comment you do not own', async () => {
-    const ownerAgent = await registerAgent('Post Owner');
-    const commenterAgent = await registerAgent('Commenter');
+    const [ownerAgent, commenterAgent] = await Promise.all([
+      registerAgent('Post Owner'),
+      registerAgent('Commenter'),
+    ]);
 
     const createRes = await ownerAgent.post('/api/posts').send({ title: 'Discuss This', content: 'Body.' });
     const { post } = createRes.body;
@@ -145,8 +147,10 @@ describe('Likes', () => {
   });
 
   it('toggles a like on and off, updating the count', async () => {
-    const ownerAgent = await registerAgent('Post Owner');
-    const likerAgent = await registerAgent('Liker');
+    const [ownerAgent, likerAgent] = await Promise.all([
+      registerAgent('Post Owner'),
+      registerAgent('Liker'),
+    ]);
 
     const createRes = await ownerAgent.post('/api/posts').send({ title: 'Popular Post', content: 'Like this.' });
     const { post } = createRes.body;
