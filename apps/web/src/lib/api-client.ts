@@ -1,4 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+// In the browser, call this app's own origin (proxied to the API via next.config.js
+// rewrites) so the auth cookie stays first-party. Server-side code (RSC, route
+// handlers, server actions) isn't subject to that and calls the API directly.
+const BASE_URL = typeof window === 'undefined' ? API_URL : '';
 
 export class ApiError extends Error {
   status: number;
@@ -13,7 +17,7 @@ export class ApiError extends Error {
 }
 
 async function request<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     credentials: 'include',
     headers: {
