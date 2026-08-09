@@ -87,8 +87,10 @@ describe('Post CRUD lifecycle', () => {
   });
 
   it('blocks a non-owner from editing or deleting a post', async () => {
-    const ownerAgent = await registerAgent('Owner');
-    const otherAgent = await registerAgent('Other User');
+    const [ownerAgent, otherAgent] = await Promise.all([
+      registerAgent('Owner'),
+      registerAgent('Other User'),
+    ]);
 
     const createRes = await ownerAgent
       .post('/api/posts')
