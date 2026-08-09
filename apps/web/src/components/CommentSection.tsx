@@ -4,6 +4,7 @@ import { CreateCommentInputSchema } from '@av-blog/shared';
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient, ApiError } from '@/lib/api-client';
+import { revalidateComments } from '@/lib/actions';
 import type { Comment } from '@/lib/types';
 
 export function CommentSection({ postId, initialComments }: { postId: string; initialComments: Comment[] }) {
@@ -31,6 +32,7 @@ export function CommentSection({ postId, initialComments }: { postId: string; in
       );
       setComments((prev) => [...prev, comment]);
       setContent('');
+      await revalidateComments(postId);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong');
     } finally {
@@ -42,6 +44,7 @@ export function CommentSection({ postId, initialComments }: { postId: string; in
     if (!confirm('Delete this comment?')) return;
     await apiClient.delete(`/api/comments/${commentId}`);
     setComments((prev) => prev.filter((c) => c.id !== commentId));
+    await revalidateComments(postId);
   }
 
   return (

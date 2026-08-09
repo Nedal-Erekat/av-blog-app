@@ -14,6 +14,9 @@ jest.mock('@/lib/api-client', () => ({
 jest.mock('@/context/AuthContext', () => ({
   useAuth: jest.fn(),
 }));
+jest.mock('@/lib/actions', () => ({
+  revalidateComments: jest.fn(),
+}));
 
 const mockedApiClient = apiClient as jest.Mocked<typeof apiClient>;
 const mockedUseAuth = useAuth as jest.Mock;

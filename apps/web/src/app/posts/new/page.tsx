@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { PostForm } from '@/components/PostForm';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
+import { revalidatePostsList } from '@/lib/actions';
 import type { Post } from '@/lib/types';
 
 export default function NewPostPage() {
@@ -27,6 +28,7 @@ export default function NewPostPage() {
           submitLabel="Publish"
           onSubmit={async (input) => {
             const { post } = await apiClient.post<{ post: Post }>('/api/posts', input);
+            await revalidatePostsList();
             router.push(`/posts/${post.slug}`);
             router.refresh();
           }}
