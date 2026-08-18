@@ -1,14 +1,19 @@
 import { CategoryFilterShell } from '@/components/CategoryFilterShell';
 import { PostCard } from '@/components/PostCard';
+import { PostsPagination } from '@/components/PostsPagination';
 import { getCategories, getPosts } from '@/lib/data';
 
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; page?: string }>;
 }) {
-  const { category: activeCategory } = await searchParams;
-  const [posts, categories] = await Promise.all([getPosts(activeCategory), getCategories()]);
+  const { category: activeCategory, page } = await searchParams;
+  const pageNumber = Number(page) || 1;
+  const [{ posts, pagination }, categories] = await Promise.all([
+    getPosts(activeCategory, pageNumber),
+    getCategories(),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
@@ -25,6 +30,8 @@ export default async function HomePage({
           </div>
         )}
       </CategoryFilterShell>
+
+      <PostsPagination pagination={pagination} category={activeCategory} />
     </main>
   );
 }

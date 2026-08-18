@@ -6,16 +6,25 @@ const postInclude = {
   _count: { select: { comments: true, likes: true } },
 } satisfies Prisma.PostInclude;
 
+function buildWhere(filter?: { authorId?: string; categorySlug?: string }): Prisma.PostWhereInput {
+  return {
+    ...(filter?.authorId ? { authorId: filter.authorId } : {}),
+    ...(filter?.categorySlug ? { category: { slug: filter.categorySlug } } : {}),
+  };
+}
+
 export const postRepository = {
-  findMany(filter?: { authorId?: string; categorySlug?: string }) {
+  findMany(filter?: { authorId?: string; categorySlug?: string; skip?: number; take?: number }) {
     return prisma.post.findMany({
-      where: {
-        ...(filter?.authorId ? { authorId: filter.authorId } : {}),
-        ...(filter?.categorySlug ? { category: { slug: filter.categorySlug } } : {}),
-      },
+      where: buildWhere(filter),
       orderBy: { createdAt: 'desc' },
       include: postInclude,
+      skip: filter?.skip,
+      take: filter?.take,
     });
+  },
+  count(filter?: { authorId?: string; categorySlug?: string }) {
+    return prisma.post.count({ where: buildWhere(filter) });
   },
   findBySlug(slug: string) {
     return prisma.post.findUnique({ where: { slug }, include: postInclude });

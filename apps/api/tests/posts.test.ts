@@ -30,6 +30,45 @@ describe('GET /api/posts', () => {
     expect(Array.isArray(res.body.posts)).toBe(true);
   });
 
+  it('defaults to page 1 of 10 and reports total counts', async () => {
+    const res = await request(app).get('/api/posts');
+    expect(res.status).toBe(200);
+    expect(res.body.posts.length).toBeLessThanOrEqual(10);
+    expect(res.body.pagination).toEqual(
+      expect.objectContaining({ page: 1, limit: 10, total: expect.any(Number), totalPages: expect.any(Number) }),
+    );
+  });
+
+  it('paginates by authorId without returning posts from other authors', async () => {
+    const agent = await registerAgent();
+    const created = [];
+    for (let i = 0; i < 3; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await agent.post('/api/posts').send({ title: `Page Post ${i}`, content: 'Body.' });
+      created.push(res.body.post);
+    }
+    const authorId = created[0].authorId;
+
+    const page1 = await request(app).get(`/api/posts?authorId=${authorId}&limit=2&page=1`);
+    const page2 = await request(app).get(`/api/posts?authorId=${authorId}&limit=2&page=2`);
+
+    expect(page1.body.posts).toHaveLength(2);
+    expect(page1.body.pagination).toEqual({ page: 1, limit: 2, total: 3, totalPages: 2 });
+    expect(page2.body.posts).toHaveLength(1);
+    expect(page2.body.pagination.page).toBe(2);
+
+    const ids = [...page1.body.posts, ...page2.body.posts].map((p: { id: string }) => p.id);
+    expect(new Set(ids).size).toBe(3);
+
+    await Promise.all(created.map((post) => agent.delete(`/api/posts/${post.id}`)));
+  });
+
+  it('clamps an oversized limit instead of erroring', async () => {
+    const res = await request(app).get('/api/posts?limit=9999');
+    expect(res.status).toBe(200);
+    expect(res.body.pagination.limit).toBe(50);
+  });
+
   it('filters by authorId when provided', async () => {
     const agent = await registerAgent();
     const createRes = await agent
