@@ -6,6 +6,23 @@ const postInclude = {
   _count: { select: { comments: true, likes: true } },
 } satisfies Prisma.PostInclude;
 
+// Everything postInclude exposes, minus `content`. The list endpoint only ever
+// renders the excerpt (see PostCard), so there's no reason to pull every post
+// body into memory just to discard it — `select` stops it at the query instead
+// of `include`'s "give me every scalar column" default.
+const postListSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  excerpt: true,
+  authorId: true,
+  categoryId: true,
+  createdAt: true,
+  updatedAt: true,
+  category: true,
+  _count: { select: { comments: true, likes: true } },
+} satisfies Prisma.PostSelect;
+
 export const postRepository = {
   findMany(filter?: { authorId?: string; categorySlug?: string }) {
     return prisma.post.findMany({
@@ -14,7 +31,7 @@ export const postRepository = {
         ...(filter?.categorySlug ? { category: { slug: filter.categorySlug } } : {}),
       },
       orderBy: { createdAt: 'desc' },
-      include: postInclude,
+      select: postListSelect,
     });
   },
   findBySlug(slug: string) {

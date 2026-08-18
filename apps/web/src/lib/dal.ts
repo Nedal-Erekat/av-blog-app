@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { apiClient, ApiError } from '@/lib/api-client';
-import type { Post, PublicUser } from '@/lib/types';
+import type { Post, PostSummary, PublicUser } from '@/lib/types';
 
 /**
  * Data Access Layer.
@@ -53,10 +53,13 @@ export const verifySession = cache(async (): Promise<{ user: PublicUser; cookieH
   return { user, cookieHeader };
 });
 
-/** Posts written by the signed-in user. Requires a session. */
-export const getMyPosts = cache(async (): Promise<Post[]> => {
+/**
+ * Posts written by the signed-in user. Requires a session. The dashboard only
+ * ever renders title/slug, so this reads the list shape (no `content`).
+ */
+export const getMyPosts = cache(async (): Promise<PostSummary[]> => {
   const { user } = await verifySession();
-  const { posts } = await apiClient.get<{ posts: Post[] }>(`/api/posts?authorId=${user.id}`, {
+  const { posts } = await apiClient.get<{ posts: PostSummary[] }>(`/api/posts?authorId=${user.id}`, {
     cache: 'no-store',
   });
   return posts;
