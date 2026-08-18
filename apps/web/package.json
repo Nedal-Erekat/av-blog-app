@@ -12,7 +12,7 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@av-blog/shared": "*",
+    "@av-blog/shared": "workspace:*",
     "next": "16.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
