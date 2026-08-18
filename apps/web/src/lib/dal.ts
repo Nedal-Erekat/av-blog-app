@@ -53,10 +53,16 @@ export const verifySession = cache(async (): Promise<{ user: PublicUser; cookieH
   return { user, cookieHeader };
 });
 
-/** Posts written by the signed-in user. Requires a session. */
+/**
+ * Posts written by the signed-in user. Requires a session.
+ *
+ * The dashboard has no pagination UI yet, so this asks for the API's max page
+ * size rather than the default — otherwise an author with more than 10 posts
+ * would silently stop seeing the rest of their own list.
+ */
 export const getMyPosts = cache(async (): Promise<Post[]> => {
   const { user } = await verifySession();
-  const { posts } = await apiClient.get<{ posts: Post[] }>(`/api/posts?authorId=${user.id}`, {
+  const { posts } = await apiClient.get<{ posts: Post[] }>(`/api/posts?authorId=${user.id}&limit=50`, {
     cache: 'no-store',
   });
   return posts;

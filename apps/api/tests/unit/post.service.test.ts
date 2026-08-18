@@ -12,6 +12,7 @@ import type { PostRepository } from '../../src/repositories/post.repository';
 function mockRepository(overrides: Partial<PostRepository> = {}): PostRepository {
   return {
     findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
     findBySlug: jest.fn().mockResolvedValue(null),
     findById: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
@@ -62,6 +63,52 @@ describe('postService.createPost', () => {
 
     expect(categoryRepository.create).not.toHaveBeenCalled();
     expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 'cat-1' }));
+  });
+});
+
+describe('postService.listPosts', () => {
+  it('defaults to page 1 with a limit of 10', async () => {
+    const repository = mockRepository({ count: jest.fn().mockResolvedValue(23) });
+    const service = createPostService(repository);
+
+    const result = await service.listPosts();
+
+    expect(repository.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 10 }),
+    );
+    expect(result.pagination).toEqual({ page: 1, limit: 10, total: 23, totalPages: 3 });
+  });
+
+  it('computes skip from the requested page and limit', async () => {
+    const repository = mockRepository({ count: jest.fn().mockResolvedValue(23) });
+    const service = createPostService(repository);
+
+    const result = await service.listPosts({ page: 3, limit: 5 });
+
+    expect(repository.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 10, take: 5 }),
+    );
+    expect(result.pagination).toEqual({ page: 3, limit: 5, total: 23, totalPages: 5 });
+  });
+
+  it('clamps limit to MAX_PAGE_SIZE and page to a minimum of 1', async () => {
+    const repository = mockRepository({ count: jest.fn().mockResolvedValue(0) });
+    const service = createPostService(repository);
+
+    await service.listPosts({ page: -5, limit: 500 });
+
+    expect(repository.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 50 }),
+    );
+  });
+
+  it('reports totalPages as 1 when there are no results', async () => {
+    const repository = mockRepository({ count: jest.fn().mockResolvedValue(0) });
+    const service = createPostService(repository);
+
+    const result = await service.listPosts();
+
+    expect(result.pagination.totalPages).toBe(1);
   });
 });
 

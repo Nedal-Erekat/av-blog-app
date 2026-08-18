@@ -20,6 +20,13 @@ export type Comment = {
   author: { id: string; name: string };
 };
 
+export type Pagination = {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+};
+
 export type Post = {
   id: string;
   title: string;

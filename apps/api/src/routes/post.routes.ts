@@ -14,8 +14,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const authorId = typeof req.query.authorId === 'string' ? req.query.authorId : undefined;
     const categorySlug = typeof req.query.category === 'string' ? req.query.category : undefined;
-    const posts = await postService.listPosts({ authorId, categorySlug });
-    res.json({ posts });
+    const page = Number(req.query.page) || undefined;
+    const limit = Number(req.query.limit) || undefined;
+    const { posts, pagination } = await postService.listPosts({ authorId, categorySlug, page, limit });
+    res.json({ posts, pagination });
   }),
 );
 

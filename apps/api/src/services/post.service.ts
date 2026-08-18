@@ -3,6 +3,13 @@ import { ForbiddenError, NotFoundError } from '../errors';
 import { categoryRepository } from '../repositories/category.repository';
 import { postRepository, type PostRepository } from '../repositories/post.repository';
 
+export const DEFAULT_PAGE_SIZE = 10;
+export const MAX_PAGE_SIZE = 50;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -35,8 +42,21 @@ async function resolveCategoryId(categoryName: string | undefined): Promise<stri
 
 export function createPostService(repository: PostRepository = postRepository) {
   return {
-    listPosts(filter?: { authorId?: string; categorySlug?: string }) {
-      return repository.findMany(filter);
+    async listPosts(filter?: { authorId?: string; categorySlug?: string; page?: number; limit?: number }) {
+      const limit = clamp(filter?.limit ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
+      const page = Math.max(filter?.page ?? 1, 1);
+      const skip = (page - 1) * limit;
+      const listFilter = { authorId: filter?.authorId, categorySlug: filter?.categorySlug };
+
+      const [posts, total] = await Promise.all([
+        repository.findMany({ ...listFilter, skip, take: limit }),
+        repository.count(listFilter),
+      ]);
+
+      return {
+        posts,
+        pagination: { page, limit, total, totalPages: Math.max(Math.ceil(total / limit), 1) },
+      };
     },
 
     async getPostBySlug(slug: string) {

@@ -1,14 +1,19 @@
 import { cacheLife, cacheTag } from 'next/cache';
 import { apiClient } from '@/lib/api-client';
-import type { Category, Comment, Post } from '@/lib/types';
+import type { Category, Comment, Pagination, Post } from '@/lib/types';
 
-export async function getPosts(category?: string) {
+export async function getPosts(category?: string, page?: number) {
   'use cache';
   cacheLife('minutes');
   cacheTag('posts');
-  const query = category ? `?category=${category}` : '';
-  const { posts } = await apiClient.get<{ posts: Post[] }>(`/api/posts${query}`);
-  return posts;
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (page) params.set('page', String(page));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const { posts, pagination } = await apiClient.get<{ posts: Post[]; pagination: Pagination }>(
+    `/api/posts${query}`,
+  );
+  return { posts, pagination };
 }
 
 export async function getCategories() {
