@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Two deployable apps plus a shared library, in one npm-workspaces monorepo:
+Two deployable apps plus a shared library, in one pnpm-workspaces monorepo:
 
 | Workspace | What | Runs on |
 |---|---|---|

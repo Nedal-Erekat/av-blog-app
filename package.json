@@ -2,25 +2,31 @@
   "name": "av-blog-app",
   "private": true,
   "version": "1.0.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "concurrently -n web,api -c blue,green \"npm run dev -w apps/web\" \"npm run dev -w apps/api\"",
-    "lint": "npm run lint -w apps/web && npm run lint -w apps/api",
-    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
-    "test": "npm run test -w apps/api && npm run test -w apps/web",
-    "test:coverage": "npm run test:coverage -w apps/api && npm run test:coverage -w apps/web",
-    "build": "npm run build -w packages/shared --if-present && npm run build -w apps/api && npm run build -w apps/web",
-    "postinstall": "npm run build -w packages/shared"
+    "dev": "concurrently -n web,api -c blue,green \"pnpm --filter @av-blog/web dev\" \"pnpm --filter @av-blog/api dev\"",
+    "lint": "pnpm --filter @av-blog/web lint && pnpm --filter @av-blog/api lint",
+    "typecheck": "pnpm --filter @av-blog/api typecheck && pnpm --filter @av-blog/web typecheck",
+    "test": "pnpm --filter @av-blog/api test && pnpm --filter @av-blog/web test",
+    "test:coverage": "pnpm --filter @av-blog/api test:coverage && pnpm --filter @av-blog/web test:coverage",
+    "build": "pnpm --filter @av-blog/shared build && pnpm --filter @av-blog/api build && pnpm --filter @av-blog/web build",
+    "postinstall": "pnpm --filter @av-blog/shared build"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
   },
-  "overrides": {
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+  "pnpm": {
+    "overrides": {
+      "react": "19.2.8",
+      "react-dom": "19.2.8"
+    },
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma",
+      "unrs-resolver"
+    ]
   },
   "engines": {
     "node": ">=20"

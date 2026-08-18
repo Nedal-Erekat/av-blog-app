@@ -44,15 +44,17 @@ in `apps/api/.env.docker`.
 
 ## Run locally
 
-Requires Node 20+ and a PostgreSQL database.
+Requires Node 20+, [pnpm](https://pnpm.io) 10+, and a PostgreSQL database.
 
 ```bash
-npm install                              # also builds packages/shared + generates Prisma client
+pnpm install                             # also builds packages/shared + generates Prisma client
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
-npm run prisma:migrate -w apps/api
-npm run dev                              # web :3000, api :4000
+pnpm --filter @av-blog/api prisma:migrate
+pnpm dev                                 # web :3000, api :4000
 ```
+
+No pnpm installed yet? `corepack enable` — Node ships pnpm's exact pinned version (see `packageManager` in `package.json`) via Corepack, no separate install needed.
 
 Set in `apps/api/.env`:
 
@@ -68,7 +70,7 @@ migrations — PgBouncer's transaction mode can't run migration DDL.
 ## Seeding
 
 ```bash
-npm run seed -w apps/api                     # local
+pnpm --filter @av-blog/api prisma:seed       # local
 docker-compose exec api npx prisma db seed   # Compose (already runs on startup)
 ```
 
@@ -78,10 +80,10 @@ so re-running is safe. Optional — you can register at `/register` instead.
 ## Commands
 
 ```bash
-npm test               # both workspaces
-npm run test:coverage
-npm run lint
-npm run typecheck
+pnpm test               # both workspaces
+pnpm test:coverage
+pnpm lint
+pnpm typecheck
 ```
 
 Backend has Supertest integration tests against real Postgres plus unit tests with mocked
@@ -105,9 +107,14 @@ protection requiring CI is the fix, and is what I'd add on a real team.
 
 ### Platform setup
 
-**Render** — build `npm ci && npm run build -w apps/api`, start `npm start -w apps/api`. Leave
-Root Directory unset so workspace commands run from the repo root. Set the same env vars as
-`apps/api/.env`.
+**Render** — build `corepack enable && pnpm install --frozen-lockfile && pnpm --filter @av-blog/api build`,
+start `pnpm --filter @av-blog/api start`. Leave Root Directory unset so workspace commands run from
+the repo root. Set the same env vars as `apps/api/.env`.
 
-**Vercel** — set Root Directory to `apps/web`, leave install/build commands on their defaults so
-Vercel's monorepo detection builds `packages/shared` first.
+> ⚠️ Render's build/start commands are set in its dashboard, not in this repo — they won't update
+> themselves. Whoever merges the pnpm migration needs to update them there by hand, or the next
+> deploy will fail on a stale `npm ci`.
+
+**Vercel** — set Root Directory to `apps/web`, leave install/build commands on their defaults.
+Vercel auto-detects `pnpm-lock.yaml` and switches its install command to pnpm accordingly; its
+monorepo detection still builds `packages/shared` first.
