@@ -30,6 +30,25 @@ describe('GET /api/posts', () => {
     expect(Array.isArray(res.body.posts)).toBe(true);
   });
 
+  it('omits content from the list response but keeps it on the detail response', async () => {
+    const agent = await registerAgent();
+    const createRes = await agent
+      .post('/api/posts')
+      .send({ title: 'No Content Leak', content: 'Body that should not appear in the list.' });
+    const { post } = createRes.body;
+
+    const listRes = await request(app).get('/api/posts');
+    const listed = listRes.body.posts.find((p: { id: string }) => p.id === post.id);
+    expect(listed).toBeDefined();
+    expect(listed.content).toBeUndefined();
+    expect(listed.excerpt).toBe(post.excerpt);
+
+    const detailRes = await request(app).get(`/api/posts/${post.slug}`);
+    expect(detailRes.body.post.content).toBe('Body that should not appear in the list.');
+
+    await agent.delete(`/api/posts/${post.id}`);
+  });
+
   it('filters by authorId when provided', async () => {
     const agent = await registerAgent();
     const createRes = await agent

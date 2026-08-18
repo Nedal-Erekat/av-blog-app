@@ -1,7 +1,7 @@
 import { PostTitleLink } from '@/components/PostTitleLink';
-import type { Post } from '@/lib/types';
+import type { PostSummary } from '@/lib/types';
 
-export function PostCard({ post }: { post: Post }) {
+export function PostCard({ post }: { post: PostSummary }) {
   return (
     <article className="border-b border-gray-200 py-6">
       <PostTitleLink href={`/posts/${post.slug}`} title={post.title} />

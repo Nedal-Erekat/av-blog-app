@@ -20,15 +20,20 @@ export type Comment = {
   author: { id: string; name: string };
 };
 
-export type Post = {
+/** Shape returned by the list endpoint (`GET /api/posts`) — no `content`. */
+export type PostSummary = {
   id: string;
   title: string;
   slug: string;
-  content: string;
   excerpt: string;
   authorId: string;
   createdAt: string;
   updatedAt: string;
   category: Category | null;
   _count: { comments: number; likes: number };
+};
+
+/** Shape returned by single-post endpoints — includes the full body. */
+export type Post = PostSummary & {
+  content: string;
 };
