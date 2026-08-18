@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import 'dotenv/config';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
+import { closeDb, db } from './index';
+import { categories, posts, users } from './schema';
 
 const CATEGORIES = [
   { name: 'Engineering', slug: 'engineering' },
@@ -107,47 +107,49 @@ const POSTS: Array<{
   },
 ];
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 async function main() {
   const categoryByName = new Map<string, string>();
   for (const category of CATEGORIES) {
-    const created = await prisma.category.upsert({
-      where: { name: category.name },
-      update: {},
-      create: category,
-    });
+    // Upsert: `onConflictDoUpdate` with a self-assignment is how you get the
+    // existing row back from Postgres — `onConflictDoNothing` returns nothing on
+    // conflict, so a re-run would leave the id unresolved.
+    const [created] = await db
+      .insert(categories)
+      .values(category)
+      .onConflictDoUpdate({ target: categories.name, set: { name: category.name } })
+      .returning();
     categoryByName.set(category.name, created.id);
   }
 
   const passwordHash = await bcrypt.hash(DEMO_USER.password, 10);
-  const user = await prisma.user.upsert({
-    where: { email: DEMO_USER.email },
-    update: {},
-    create: {
-      email: DEMO_USER.email,
-      name: DEMO_USER.name,
-      passwordHash,
-    },
-  });
+  const [user] = await db
+    .insert(users)
+    .values({ email: DEMO_USER.email, name: DEMO_USER.name, passwordHash })
+    .onConflictDoUpdate({ target: users.email, set: { email: DEMO_USER.email } })
+    .returning();
 
   for (const post of POSTS) {
-    const slug = post.title
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    const slug = slugify(post.title);
 
-    await prisma.post.upsert({
-      where: { slug },
-      update: {},
-      create: {
+    await db
+      .insert(posts)
+      .values({
         title: post.title,
         slug,
         content: post.content,
         excerpt: post.excerpt,
         authorId: user.id,
         categoryId: categoryByName.get(post.category),
-      },
-    });
+      })
+      .onConflictDoNothing({ target: posts.slug });
   }
 
   console.log(`Seeded ${CATEGORIES.length} categories and ${POSTS.length} posts for ${DEMO_USER.email}.`);
@@ -159,5 +161,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await closeDb();
   });

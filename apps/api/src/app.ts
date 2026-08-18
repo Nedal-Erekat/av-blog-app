@@ -1,8 +1,9 @@
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import { sql } from 'drizzle-orm';
 import express, { type Express } from 'express';
 import { env } from './config/env';
-import { prisma } from './lib/prisma';
+import { db } from './db';
 import { errorHandler } from './middleware/error-handler';
 import authRoutes from './routes/auth.routes';
 import categoryRoutes from './routes/category.routes';
@@ -23,7 +24,7 @@ export function createApp(): Express {
 
   app.get('/api/health', async (_req, res) => {
     try {
-      await prisma.$queryRaw`SELECT 1`;
+      await db.execute(sql`SELECT 1`);
       res.json({ status: 'ok', db: 'connected' });
     } catch {
       res.status(503).json({ status: 'error', db: 'unreachable' });

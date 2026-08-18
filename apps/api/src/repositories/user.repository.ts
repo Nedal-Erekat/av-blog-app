@@ -1,18 +1,22 @@
-import type { User } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { eq } from 'drizzle-orm';
+import { db } from '../db';
+import { users, type User } from '../db/schema';
 
-// Repository pattern: services talk to this interface, never to Prisma directly.
+// Repository pattern: services talk to this interface, never to Drizzle directly.
 // Lets service-layer unit tests mock data access instead of hitting a real DB,
 // and keeps the ORM swappable behind one file if it ever needs to change.
 export const userRepository = {
-  findByEmail(email: string): Promise<User | null> {
-    return prisma.user.findUnique({ where: { email } });
+  async findByEmail(email: string): Promise<User | null> {
+    const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+    return user ?? null;
   },
-  findById(id: string): Promise<User | null> {
-    return prisma.user.findUnique({ where: { id } });
+  async findById(id: string): Promise<User | null> {
+    const user = await db.query.users.findFirst({ where: eq(users.id, id) });
+    return user ?? null;
   },
-  create(data: { email: string; passwordHash: string; name: string }): Promise<User> {
-    return prisma.user.create({ data });
+  async create(data: { email: string; passwordHash: string; name: string }): Promise<User> {
+    const [user] = await db.insert(users).values(data).returning();
+    return user;
   },
 };
 

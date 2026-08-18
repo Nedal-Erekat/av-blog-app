@@ -7,7 +7,7 @@ Two deployable apps plus a shared library, in one npm-workspaces monorepo:
 | Workspace | What | Runs on |
 |---|---|---|
 | `apps/web` | Next.js 16 (App Router) + React 19 + Tailwind | Vercel |
-| `apps/api` | Express 4 REST API + Prisma 5 | Render |
+| `apps/api` | Express 4 REST API + Drizzle ORM | Render |
 | `packages/shared` | Zod schemas + inferred types | imported by both |
 
 The API is a standalone service, not Next route handlers. It costs an extra hop and a second
@@ -19,7 +19,7 @@ flowchart LR
     B[Browser] -->|"/api/* (same origin)"| W[Next.js server<br/>apps/web]
     W -->|"rewrite proxy"| A[Express API<br/>apps/api]
     W -->|"server-side fetch (RSC)"| A
-    A -->|Prisma| D[(PostgreSQL)]
+    A -->|Drizzle| D[(PostgreSQL)]
     S[["packages/shared"]] -.-> W
     S -.-> A
 ```
@@ -31,13 +31,16 @@ routes/        HTTP: paths, status codes, cookies
   ↓ validate(schema) — zod parse, 400 on failure
 services/      business rules: ownership, slug uniqueness
   ↓
-repositories/  the only modules that import prisma
+repositories/  the only modules that import db
   ↓
-lib/prisma.ts  one PrismaClient
+db/index.ts    one postgres.js pool + Drizzle instance
+db/schema.ts   tables, relations, inferred row types
 ```
 
-**`prisma` is imported in `repositories/` and nowhere else.** That single rule is what makes
-services testable without a database — see [design-pattern.md](design-pattern.md).
+**`db` is imported in `repositories/` and nowhere else** (plus the health check and the seed/migrate
+scripts, which are not request paths). That single rule is what makes services testable without a
+database — see [design-pattern.md](design-pattern.md) — and it is what let the ORM be swapped from
+Prisma to Drizzle without editing a service.
 
 ## 3. Data model
 
@@ -182,15 +185,16 @@ CI runs these as separate per-app jobs so a frontend failure doesn't mask a back
 | Web | Vercel | `web` container |
 | API | Render | `api` container |
 | Database | Supabase Postgres | `postgres:16-alpine` |
-| Migrations | `prisma migrate deploy` | same, on API start |
+| Migrations | `db:migrate:prod` | same, on API start |
 
 Deploys run through Vercel's and Render's native GitHub integrations rather than a custom Actions
 workflow, which would mean storing deploy tokens to reproduce something that already works. CI stays
 a quality gate.
 
-Prisma uses both `url` and `directUrl`: queries go through the pooler (serverless opens many
-short-lived connections), migrations need the direct connection because PgBouncer's transaction mode
-can't run migration DDL.
+Both `DATABASE_URL` and `DIRECT_URL` are used: queries go through the pooler (serverless opens many
+short-lived connections) with `prepare: false`, since PgBouncer's transaction mode can't hold
+server-side prepared statements across pooled connections. Migrations use the direct connection,
+because that same transaction mode can't run migration DDL either.
 
 ## 10. Known trade-offs
 
