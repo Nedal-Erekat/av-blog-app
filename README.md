@@ -5,7 +5,7 @@
 Full-stack blogging platform built for the Avertra Senior JavaScript Engineer assessment.
 
 - **Frontend** — Next.js 16 (App Router), React 19, Tailwind, Context API for auth state
-- **Backend** — Express + Prisma REST API, PostgreSQL
+- **Backend** — Express + Drizzle REST API, PostgreSQL
 - **Auth** — JWT in an httpOnly cookie
 - **Docs** — [design pattern](docs/design-pattern.md) · [system design](docs/system-design.md)
 
@@ -20,7 +20,7 @@ Free tier: the API sleeps after 15 minutes idle, so the first request can take ~
 
 ```
 apps/web/          Next.js frontend
-apps/api/          Express + Prisma REST API
+apps/api/          Express + Drizzle REST API
 packages/shared/   zod schemas + types used by both
 docs/              design write-ups
 ```
@@ -47,10 +47,11 @@ in `apps/api/.env.docker`.
 Requires Node 20+ and a PostgreSQL database.
 
 ```bash
-npm install                              # also builds packages/shared + generates Prisma client
+npm install                              # also builds packages/shared
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env
-npm run prisma:migrate -w apps/api
+npm run db:migrate -w apps/api
+npm run db:seed -w apps/api             # optional demo content
 npm run dev                              # web :3000, api :4000
 ```
 
@@ -62,18 +63,38 @@ Set in `apps/api/.env`:
 | `DIRECT_URL` | direct connection (port `5432`) — migrations only |
 | `JWT_SECRET` | 16+ random chars |
 
-Two URLs because Prisma runs queries through the pooler but needs a direct connection for
-migrations — PgBouncer's transaction mode can't run migration DDL.
+Two URLs because the app queries through the pooler but migrations need a direct connection —
+PgBouncer's transaction mode can't run migration DDL. The pooled client is opened with
+`prepare: false` for the same reason.
 
 ## Seeding
 
 ```bash
-npm run seed -w apps/api                     # local
-docker-compose exec api npx prisma db seed   # Compose (already runs on startup)
+npm run db:seed -w apps/api                  # local
+docker-compose exec api npm run db:seed:prod # Compose (already runs on startup)
 ```
 
 Creates 4 categories, 8 posts, and a demo author (`demo@avertra.com` / `Demo1234!`). All upserts,
 so re-running is safe. Optional — you can register at `/register` instead.
+
+## Database
+
+Drizzle keeps the schema in TypeScript (`apps/api/src/db/schema.ts`) and generates SQL migrations
+from it into `apps/api/drizzle/`.
+
+```bash
+npm run db:generate -w apps/api   # diff schema.ts against the migrations, write a new .sql file
+npm run db:migrate -w apps/api    # apply pending migrations
+npm run db:studio -w apps/api     # browse the data
+npm run db:seed -w apps/api       # demo content
+```
+
+Edit `schema.ts`, run `db:generate`, and commit the generated `.sql` alongside it — the migration
+file is source code, and CI applies it to a throwaway Postgres before the tests run.
+
+Migrations are applied in production by `db:migrate:prod`, which runs the compiled
+`dist/db/migrate.js` against the built image — drizzle-kit is a dev dependency and is not needed at
+deploy time.
 
 ## Commands
 

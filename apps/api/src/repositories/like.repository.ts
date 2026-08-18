@@ -1,18 +1,25 @@
-import type { Like } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { and, count, eq } from 'drizzle-orm';
+import { db } from '../db';
+import { likes, type Like } from '../db/schema';
+
+const identity = (postId: string, userId: string) => and(eq(likes.postId, postId), eq(likes.userId, userId));
 
 export const likeRepository = {
-  find(postId: string, userId: string): Promise<Like | null> {
-    return prisma.like.findUnique({ where: { postId_userId: { postId, userId } } });
+  async find(postId: string, userId: string): Promise<Like | null> {
+    const like = await db.query.likes.findFirst({ where: identity(postId, userId) });
+    return like ?? null;
   },
-  create(postId: string, userId: string): Promise<Like> {
-    return prisma.like.create({ data: { postId, userId } });
+  async create(postId: string, userId: string): Promise<Like> {
+    const [like] = await db.insert(likes).values({ postId, userId }).returning();
+    return like;
   },
-  delete(postId: string, userId: string): Promise<Like> {
-    return prisma.like.delete({ where: { postId_userId: { postId, userId } } });
+  async delete(postId: string, userId: string): Promise<Like> {
+    const [like] = await db.delete(likes).where(identity(postId, userId)).returning();
+    return like;
   },
-  count(postId: string): Promise<number> {
-    return prisma.like.count({ where: { postId } });
+  async count(postId: string): Promise<number> {
+    const [row] = await db.select({ value: count() }).from(likes).where(eq(likes.postId, postId));
+    return row.value;
   },
 };
 

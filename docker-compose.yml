@@ -28,7 +28,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: sh -c "npx prisma migrate deploy && npx prisma db seed && npm start"
+    command: sh -c "npm run db:migrate:prod && npm run db:seed:prod && npm start"
 
   web:
     build:

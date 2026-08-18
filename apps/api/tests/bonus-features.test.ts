@@ -1,6 +1,8 @@
+import { inArray } from 'drizzle-orm';
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { prisma } from '../src/lib/prisma';
+import { closeDb, db } from '../src/db';
+import { categories, users } from '../src/db/schema';
 
 const app = createApp();
 const createdEmails: string[] = [];
@@ -26,9 +28,13 @@ async function registerAgent(name = 'Bonus Tester') {
 }
 
 afterAll(async () => {
-  await prisma.category.deleteMany({ where: { name: { in: createdCategoryNames } } });
-  await prisma.user.deleteMany({ where: { email: { in: createdEmails } } });
-  await prisma.$disconnect();
+  if (createdCategoryNames.length > 0) {
+    await db.delete(categories).where(inArray(categories.name, createdCategoryNames));
+  }
+  if (createdEmails.length > 0) {
+    await db.delete(users).where(inArray(users.email, createdEmails));
+  }
+  await closeDb();
 });
 
 describe('Categories', () => {

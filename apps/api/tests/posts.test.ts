@@ -1,6 +1,8 @@
+import { inArray } from 'drizzle-orm';
 import request from 'supertest';
 import { createApp } from '../src/app';
-import { prisma } from '../src/lib/prisma';
+import { closeDb, db } from '../src/db';
+import { users } from '../src/db/schema';
 
 const app = createApp();
 const createdEmails: string[] = [];
@@ -19,8 +21,10 @@ async function registerAgent(name = 'Post Author') {
 }
 
 afterAll(async () => {
-  await prisma.user.deleteMany({ where: { email: { in: createdEmails } } });
-  await prisma.$disconnect();
+  if (createdEmails.length > 0) {
+    await db.delete(users).where(inArray(users.email, createdEmails));
+  }
+  await closeDb();
 });
 
 describe('GET /api/posts', () => {

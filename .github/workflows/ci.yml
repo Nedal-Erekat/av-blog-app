@@ -62,7 +62,7 @@ jobs:
       - run: npm ci
       - name: Apply database migrations
         working-directory: apps/api
-        run: npx prisma migrate deploy
+        run: npm run db:migrate
       - run: npm run test:coverage -w apps/api
 
   test-web:

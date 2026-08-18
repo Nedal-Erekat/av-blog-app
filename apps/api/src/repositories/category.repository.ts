@@ -1,15 +1,18 @@
-import type { Category } from '@prisma/client';
-import { prisma } from '../lib/prisma';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../db';
+import { categories, type Category } from '../db/schema';
 
 export const categoryRepository = {
   findAll(): Promise<Category[]> {
-    return prisma.category.findMany({ orderBy: { name: 'asc' } });
+    return db.query.categories.findMany({ orderBy: asc(categories.name) });
   },
-  findByName(name: string): Promise<Category | null> {
-    return prisma.category.findUnique({ where: { name } });
+  async findByName(name: string): Promise<Category | null> {
+    const category = await db.query.categories.findFirst({ where: eq(categories.name, name) });
+    return category ?? null;
   },
-  create(data: { name: string; slug: string }): Promise<Category> {
-    return prisma.category.create({ data });
+  async create(data: { name: string; slug: string }): Promise<Category> {
+    const [category] = await db.insert(categories).values(data).returning();
+    return category;
   },
 };
 
