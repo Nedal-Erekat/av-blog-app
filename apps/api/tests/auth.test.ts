@@ -103,6 +103,50 @@ describe('GET /api/auth/me', () => {
   });
 });
 
+describe('Rate limiting on /api/auth/login', () => {
+  it('allows 10 attempts for one IP + email pair, then returns 429', async () => {
+    const email = uniqueEmail();
+    const statuses: number[] = [];
+
+    for (let i = 0; i < 11; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await request(app).post('/api/auth/login').send({ email, password: 'wrong-password' });
+      statuses.push(res.status);
+    }
+
+    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(401));
+    expect(statuses[10]).toBe(429);
+  });
+
+  it('scopes the limit per email, not just per IP', async () => {
+    // Same test process, so same source IP as the test above — a fresh email
+    // must still get a normal response instead of inheriting the 429.
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: uniqueEmail(), password: 'wrong-password' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('Rate limiting on /api/auth/register', () => {
+  it('returns 429 after exceeding the attempt limit for one IP + email pair', async () => {
+    const email = uniqueEmail();
+    const statuses: number[] = [];
+
+    for (let i = 0; i < 11; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email, password: 'password123', name: 'Test User' });
+      statuses.push(res.status);
+    }
+
+    expect(statuses[0]).toBe(201);
+    expect(statuses.slice(1, 10)).toEqual(Array(9).fill(409));
+    expect(statuses[10]).toBe(429);
+  });
+});
+
 describe('POST /api/auth/logout', () => {
   it('clears the session cookie', async () => {
     const res = await request(app).post('/api/auth/logout');

@@ -12,6 +12,12 @@ import postRoutes from './routes/post.routes';
 export function createApp(): Express {
   const app = express();
 
+  // Both the web app's Next.js rewrite proxy and Render's own load balancer sit
+  // in front of this API, so req.ip is the proxy's address unless we trust the
+  // X-Forwarded-For header from that one hop. Without this, rate limiting keyed
+  // on IP would bucket every visitor together instead of by real client.
+  app.set('trust proxy', 1);
+
   app.use(
     cors({
       origin: env.FRONTEND_URL,

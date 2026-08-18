@@ -3,6 +3,7 @@ import { Router, type CookieOptions } from 'express';
 import { env } from '../config/env';
 import { UnauthorizedError } from '../errors';
 import { requireAuth } from '../middleware/auth.middleware';
+import { authRateLimiter } from '../middleware/rate-limit.middleware';
 import { validate } from '../middleware/validate';
 import { userRepository } from '../repositories/user.repository';
 import { authService } from '../services/auth.service';
@@ -20,6 +21,7 @@ const COOKIE_OPTIONS: CookieOptions = {
 
 router.post(
   '/register',
+  authRateLimiter,
   validate(RegisterInputSchema),
   asyncHandler(async (req, res) => {
     const { user, token } = await authService.register(req.body);
@@ -30,6 +32,7 @@ router.post(
 
 router.post(
   '/login',
+  authRateLimiter,
   validate(LoginInputSchema),
   asyncHandler(async (req, res) => {
     const { user, token } = await authService.login(req.body);
