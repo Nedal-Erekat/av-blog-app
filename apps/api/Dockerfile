@@ -1,6 +1,8 @@
 FROM node:20-alpine AS build
 WORKDIR /app
-RUN apk add --no-cache openssl
+# python3/make/g++ compile bcrypt's native binding; alpine ships no prebuilt
+# binary for musl libc, so npm ci falls back to building it from source here.
+RUN apk add --no-cache openssl python3 make g++
 
 COPY package.json package-lock.json ./
 COPY apps/api ./apps/api

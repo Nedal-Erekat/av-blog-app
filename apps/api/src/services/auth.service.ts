@@ -1,5 +1,8 @@
 import type { LoginInput, RegisterInput } from '@av-blog/shared';
-import bcrypt from 'bcryptjs';
+// Native bindings, not `bcryptjs`: hashing runs on libuv's threadpool instead
+// of Node's single JS thread, so a burst of logins doesn't block every other
+// request on the event loop while it hashes.
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { ConflictError, UnauthorizedError } from '../errors';
