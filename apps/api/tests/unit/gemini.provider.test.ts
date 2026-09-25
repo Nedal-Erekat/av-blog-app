@@ -16,8 +16,17 @@ function providerWith(fetchFn: jest.Mock) {
     model: 'gemini-test',
     embeddingModel: 'embed-test',
     fetchFn: fetchFn as unknown as typeof fetch,
+    sleep: async () => undefined,
   });
 }
+
+beforeEach(() => {
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe('GeminiProvider.generateJson', () => {
   it('sends the key in a header, asks for JSON, and parses the reply', async () => {
@@ -50,12 +59,53 @@ describe('GeminiProvider.generateJson', () => {
     });
   });
 
-  it('fails on a non-2xx response such as an exhausted quota', async () => {
+  it('fails after retrying when the quota stays exhausted (429)', async () => {
     const fetchFn = jest.fn().mockResolvedValue(jsonResponse({ error: { message: 'quota' } }, 429));
 
     await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow(
       new AiProviderError('Gemini returned HTTP 429'),
     );
+    expect(fetchFn).toHaveBeenCalledTimes(3); // 1 attempt + 2 retries
+  });
+
+  it('recovers when a temporary failure clears up on retry', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}, 503))
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(
+        jsonResponse({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }] }),
+      );
+
+    await expect(providerWith(fetchFn).generateJson(request)).resolves.toMatchObject({
+      data: { ok: true },
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('waits longer before each retry (exponential backoff)', async () => {
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const provider = new GeminiProvider({
+      apiKey: 'k',
+      model: 'm',
+      embeddingModel: 'e',
+      sleep,
+      fetchFn: jest.fn().mockResolvedValue(jsonResponse({}, 500)) as unknown as typeof fetch,
+    });
+
+    await expect(provider.generateJson(request)).rejects.toThrow('HTTP 500');
+    const [first, second] = sleep.mock.calls.map(([ms]) => ms);
+    expect(first).toBeGreaterThanOrEqual(500);
+    expect(first).toBeLessThan(1000);
+    expect(second).toBeGreaterThanOrEqual(1000);
+    expect(second).toBeLessThan(1500);
+  });
+
+  it('does not retry errors that would fail the same way again (400, 403, 404)', async () => {
+    const fetchFn = jest.fn().mockResolvedValue(jsonResponse({}, 403));
+
+    await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow('HTTP 403');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
   it('fails when the model returns no content', async () => {
@@ -85,6 +135,7 @@ describe('GeminiProvider.generateJson', () => {
     const fetchFn = jest.fn().mockRejectedValue(timeout);
 
     await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow(/timed out/);
+    expect(fetchFn).toHaveBeenCalledTimes(1); // timeouts are not retried
   });
 });
 

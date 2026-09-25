@@ -11,6 +11,12 @@ import {
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_TIMEOUT_MS = 15_000;
+// Retries for temporary failures: attempt, wait ~0.5s, attempt, wait ~1s, attempt.
+const DEFAULT_MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 500;
+// Statuses that usually mean "busy, try again soon": rate limited or a server hiccup.
+// Anything else (400 bad request, 403 bad key, 404 unknown model) will fail the same way again.
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 // batchEmbedContents accepts at most 100 texts per call.
 const MAX_EMBED_BATCH = 100;
 // gemini-embedding-2's task prefixes for queries.
@@ -33,6 +39,9 @@ type GeminiProviderOptions = {
   model: string;
   embeddingModel: string;
   timeoutMs?: number;
+  maxRetries?: number;
+  // Injectable so tests don't really wait between retries.
+  sleep?: (ms: number) => Promise<void>;
   // Injectable so tests can fake the network instead of calling Google.
   fetchFn?: typeof fetch;
 };
@@ -44,12 +53,16 @@ export class GeminiProvider implements AiProvider {
   private readonly embeddingModel: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
+  private readonly maxRetries: number;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   constructor({
     apiKey,
     model,
     embeddingModel,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    maxRetries = DEFAULT_MAX_RETRIES,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     fetchFn = fetch,
   }: GeminiProviderOptions) {
     this.apiKey = apiKey;
@@ -57,6 +70,8 @@ export class GeminiProvider implements AiProvider {
     this.embeddingModel = embeddingModel;
     this.timeoutMs = timeoutMs;
     this.fetchFn = fetchFn;
+    this.maxRetries = maxRetries;
+    this.sleep = sleep;
   }
 
   async generateJson({ system, prompt, schema }: GenerateJsonRequest): Promise<GenerateJsonResult> {
@@ -138,8 +153,28 @@ export class GeminiProvider implements AiProvider {
     return embeddings;
   }
 
-  // Every Gemini call goes through here: auth header, timeout, and error mapping in one place.
+  // Every Gemini call goes through here: auth header, timeout, retries, and error mapping.
   private async request<T>(path: string, payload: unknown): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      const outcome = await this.attempt(path, payload);
+      if (outcome.ok) return outcome.body as T;
+
+      if (!outcome.retryable || attempt >= this.maxRetries) {
+        throw new AiProviderError(outcome.error);
+      }
+      // Exponential backoff with jitter: wait longer after each failure, plus a random bit so
+      // many clients failing together don't all retry at the same instant.
+      const delay = RETRY_BASE_DELAY_MS * 2 ** attempt + Math.random() * RETRY_BASE_DELAY_MS;
+      console.warn(`[ai] ${outcome.error}; retrying in ${Math.round(delay)}ms`);
+      // eslint-disable-next-line no-await-in-loop
+      await this.sleep(delay);
+    }
+  }
+
+  private async attempt(
+    path: string,
+    payload: unknown,
+  ): Promise<{ ok: true; body: unknown } | { ok: false; retryable: boolean; error: string }> {
     let res: Response;
     try {
       res = await this.fetchFn(`${GEMINI_BASE_URL}/${path}`, {
@@ -154,17 +189,22 @@ export class GeminiProvider implements AiProvider {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (err) {
-      const reason =
-        err instanceof Error && err.name === 'TimeoutError' ? 'timed out' : 'network error';
-      throw new AiProviderError(`Gemini request failed: ${reason}`);
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        // Not retried: the user has already waited the full timeout once.
+        return { ok: false, retryable: false, error: 'Gemini request failed: timed out' };
+      }
+      return { ok: false, retryable: true, error: 'Gemini request failed: network error' };
     }
 
     if (!res.ok) {
-      // 429 = free-tier quota used up; 400/403 = bad request or key. Don't echo the body
-      // to the client: it can contain details we don't want to leak.
-      throw new AiProviderError(`Gemini returned HTTP ${res.status}`);
+      // Don't echo the body to the client: it can contain details we don't want to leak.
+      return {
+        ok: false,
+        retryable: RETRYABLE_STATUSES.has(res.status),
+        error: `Gemini returned HTTP ${res.status}`,
+      };
     }
 
-    return (await res.json()) as T;
+    return { ok: true, body: await res.json() };
   }
 }

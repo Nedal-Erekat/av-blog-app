@@ -9,6 +9,7 @@ import {
   postRepository as defaultPostRepository,
   type PostRepository,
 } from '../repositories/post.repository';
+import { createRateLimiter, type RateLimiter } from '../utils/rate-limiter';
 
 // Below this cosine similarity a post counts as "not related". The right value depends on
 // the embedding model and your content: try real queries and tune it (see the learning notes).
@@ -18,6 +19,10 @@ type IndexablePost = { id: string; title: string; content: string };
 
 type SearchServiceDeps = {
   provider?: AiProvider | null;
+  // Caps semantic searches across ALL visitors. Search is public, and search pages are rendered
+  // on the Next.js server, so the API can't tell visitors apart; a global cap still protects the
+  // quota. Over the cap, search degrades to keyword mode instead of failing.
+  semanticLimiter?: RateLimiter;
   chunkRepository?: PostChunkRepository;
   postRepository?: PostRepository;
 };
@@ -26,6 +31,7 @@ export function createSearchService({
   provider = createAiProvider(),
   chunkRepository = defaultChunkRepository,
   postRepository = defaultPostRepository,
+  semanticLimiter = createRateLimiter({ limit: 60, windowMs: 60_000 }),
 }: SearchServiceDeps = {}) {
   async function indexPost(post: IndexablePost): Promise<void> {
     if (!provider) return;
@@ -64,6 +70,10 @@ export function createSearchService({
 
     async searchPosts(query: string, limit = 10) {
       if (!provider) return keywordSearch(query, limit);
+      if (!semanticLimiter.tryConsume('global').allowed) {
+        console.warn('[ai] semantic search limit reached, using keyword search');
+        return keywordSearch(query, limit);
+      }
 
       try {
         const queryEmbedding = await provider.embedQuery(query);
