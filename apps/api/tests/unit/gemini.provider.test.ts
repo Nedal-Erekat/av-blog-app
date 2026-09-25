@@ -127,6 +127,18 @@ describe('GeminiProvider embeddings', () => {
     expect(requests[0].content.parts[0].text).toBe('task: search result | query: how to deploy');
   });
 
+  it('embeds a question with the question answering task prefix', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ embeddings: [{ values: vector(0.3) }] }));
+
+    await providerWith(fetchFn).embedQuery('why postgres?', 'question-answering');
+    const { requests } = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(requests[0].content.parts[0].text).toBe(
+      'task: question answering | query: why postgres?',
+    );
+  });
+
   it('splits more than 100 documents into several batch calls', async () => {
     const fetchFn = jest.fn().mockImplementation(async (_url: string, init: RequestInit) => {
       const { requests } = JSON.parse(init.body as string);
