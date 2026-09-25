@@ -1,8 +1,13 @@
 'use client';
 
-import { CreatePostInputSchema, type CreatePostInput } from '@av-blog/shared';
+import {
+  CreatePostInputSchema,
+  SummarizePostInputSchema,
+  type CreatePostInput,
+  type PostSuggestion,
+} from '@av-blog/shared';
 import { useState, type FormEvent } from 'react';
-import { ApiError } from '@/lib/api-client';
+import { ApiError, apiClient } from '@/lib/api-client';
 
 type PostFormValues = {
   title: string;
@@ -23,6 +28,36 @@ export function PostForm({ initialValues, submitLabel, onSubmit }: PostFormProps
   );
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+
+  // Asks the API (never the model directly: the key lives server-side) to fill excerpt and category.
+  async function handleSuggest() {
+    setError(null);
+
+    const result = SummarizePostInputSchema.safeParse({ title: form.title, content: form.content });
+    if (!result.success) {
+      setError(result.error.errors[0]?.message ?? 'Invalid input');
+      return;
+    }
+
+    setSuggesting(true);
+    try {
+      const { suggestion } = await apiClient.post<{ suggestion: PostSuggestion }>(
+        '/api/ai/summarize',
+        result.data,
+      );
+      // Pre-fill only: the author reviews and can edit before publishing.
+      setForm((current) => ({
+        ...current,
+        excerpt: suggestion.excerpt,
+        category: suggestion.category,
+      }));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong');
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -102,13 +137,23 @@ export function PostForm({ initialValues, submitLabel, onSubmit }: PostFormProps
         />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-50"
-      >
-        {submitting ? 'Saving...' : submitLabel}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting || suggesting}
+          className="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-50"
+        >
+          {submitting ? 'Saving...' : submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={handleSuggest}
+          disabled={submitting || suggesting}
+          className="rounded border border-gray-300 px-4 py-2 disabled:opacity-50"
+        >
+          {suggesting ? 'Thinking...' : '✨ Suggest excerpt & category'}
+        </button>
+      </div>
     </form>
   );
 }

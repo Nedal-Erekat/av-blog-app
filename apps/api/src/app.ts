@@ -4,6 +4,7 @@ import express, { type Express } from 'express';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
 import { errorHandler } from './middleware/error-handler';
+import aiRoutes from './routes/ai.routes';
 import authRoutes from './routes/auth.routes';
 import categoryRoutes from './routes/category.routes';
 import { commentsRouter } from './routes/comment.routes';
@@ -34,6 +35,7 @@ export function createApp(): Express {
   app.use('/api/posts', postRoutes);
   app.use('/api/comments', commentsRouter);
   app.use('/api/categories', categoryRoutes);
+  app.use('/api/ai', aiRoutes);
 
   app.use(errorHandler);
 
