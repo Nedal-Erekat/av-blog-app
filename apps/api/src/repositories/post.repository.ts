@@ -17,6 +17,27 @@ export const postRepository = {
       include: postInclude,
     });
   },
+  findManyByIds(ids: string[]) {
+    return prisma.post.findMany({ where: { id: { in: ids } }, include: postInclude });
+  },
+  // Plain keyword search: the fallback when semantic search is unavailable.
+  findManyByKeyword(keyword: string, limit: number) {
+    return prisma.post.findMany({
+      where: {
+        OR: [
+          { title: { contains: keyword, mode: 'insensitive' } },
+          { content: { contains: keyword, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: postInclude,
+    });
+  },
+  // Every post's text, for rebuilding the search index.
+  findAllForIndexing() {
+    return prisma.post.findMany({ select: { id: true, title: true, content: true } });
+  },
   findBySlug(slug: string) {
     return prisma.post.findUnique({ where: { slug }, include: postInclude });
   },

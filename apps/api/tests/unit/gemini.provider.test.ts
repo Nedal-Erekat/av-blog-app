@@ -1,4 +1,4 @@
-import { AiProviderError } from '../../src/ai';
+import { AiProviderError, EMBEDDING_DIMENSIONS } from '../../src/ai';
 import { GeminiProvider } from '../../src/ai/gemini.provider';
 
 const request = { system: 'Be helpful.', prompt: 'Hello', schema: { type: 'object' } };
@@ -14,6 +14,7 @@ function providerWith(fetchFn: jest.Mock) {
   return new GeminiProvider({
     apiKey: 'test-key',
     model: 'gemini-test',
+    embeddingModel: 'embed-test',
     fetchFn: fetchFn as unknown as typeof fetch,
   });
 }
@@ -84,5 +85,66 @@ describe('GeminiProvider.generateJson', () => {
     const fetchFn = jest.fn().mockRejectedValue(timeout);
 
     await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow(/timed out/);
+  });
+});
+
+describe('GeminiProvider embeddings', () => {
+  const vector = (value: number) => Array<number>(EMBEDDING_DIMENSIONS).fill(value);
+
+  it('embeds documents with the title/text prefix and asks for 768 dimensions', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ embeddings: [{ values: vector(0.1) }, { values: vector(0.2) }] }),
+      );
+
+    const result = await providerWith(fetchFn).embedDocuments([
+      { title: 'Docker', text: 'Containers are great.' },
+      { title: '', text: 'No title here.' },
+    ]);
+
+    expect(result).toEqual([vector(0.1), vector(0.2)]);
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/embed-test:batchEmbedContents',
+    );
+    const { requests } = JSON.parse(init.body);
+    expect(requests[0]).toEqual({
+      model: 'models/embed-test',
+      content: { parts: [{ text: 'title: Docker | text: Containers are great.' }] },
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+    });
+    expect(requests[1].content.parts[0].text).toBe('title: none | text: No title here.');
+  });
+
+  it('embeds a query with the search task prefix', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ embeddings: [{ values: vector(0.3) }] }));
+
+    await expect(providerWith(fetchFn).embedQuery('how to deploy')).resolves.toEqual(vector(0.3));
+    const { requests } = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(requests[0].content.parts[0].text).toBe('task: search result | query: how to deploy');
+  });
+
+  it('splits more than 100 documents into several batch calls', async () => {
+    const fetchFn = jest.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      const { requests } = JSON.parse(init.body as string);
+      return jsonResponse({ embeddings: requests.map(() => ({ values: vector(0) })) });
+    });
+    const docs = Array.from({ length: 150 }, (_, i) => ({ title: 't', text: `chunk ${i}` }));
+
+    const result = await providerWith(fetchFn).embedDocuments(docs);
+
+    expect(result).toHaveLength(150);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects embeddings of the wrong size', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ embeddings: [{ values: [1, 2, 3] }] }));
+
+    await expect(providerWith(fetchFn).embedQuery('hi')).rejects.toThrow(/unexpected shape/);
   });
 });

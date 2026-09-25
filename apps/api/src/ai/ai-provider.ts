@@ -24,8 +24,24 @@ export type GenerateJsonResult = {
   model: string;
 };
 
+// Every embedding is a list of this many numbers. It must match the vector(768) column in
+// prisma/schema.prisma: vectors of different sizes can't be compared.
+export const EMBEDDING_DIMENSIONS = 768;
+
+export type Embedding = number[];
+
+// A piece of text we want to be able to find later, e.g. one chunk of a blog post.
+export type EmbeddingDocument = {
+  title: string;
+  text: string;
+};
+
 export interface AiProvider {
   generateJson(request: GenerateJsonRequest): Promise<GenerateJsonResult>;
+  // Documents and queries are embedded differently on purpose: a short question and a long
+  // paragraph that answers it should land close together. See "asymmetric retrieval".
+  embedDocuments(documents: EmbeddingDocument[]): Promise<Embedding[]>;
+  embedQuery(query: string): Promise<Embedding>;
 }
 
 // Thrown for anything that goes wrong talking to the model: network, timeout, quota, bad output.
