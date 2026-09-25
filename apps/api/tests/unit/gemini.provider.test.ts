@@ -211,3 +211,102 @@ describe('GeminiProvider embeddings', () => {
     await expect(providerWith(fetchFn).embedQuery('hi')).rejects.toThrow(/unexpected shape/);
   });
 });
+
+describe('GeminiProvider.chat (tool calling)', () => {
+  const tools = [
+    { name: 'search_posts', description: 'Search', parameters: { type: 'object', properties: {} } },
+  ];
+
+  it('declares tools and turns functionCall parts into tool calls, skipping thoughts', async () => {
+    const content = {
+      role: 'model',
+      parts: [
+        { text: 'thinking...', thought: true },
+        { text: 'Let me search.' },
+        {
+          functionCall: { id: 'c1', name: 'search_posts', args: { query: 'x' } },
+          thoughtSignature: 'sig',
+        },
+      ],
+    };
+    const fetchFn = jest.fn().mockResolvedValue(
+      jsonResponse({
+        candidates: [{ content }],
+        usageMetadata: { promptTokenCount: 50, candidatesTokenCount: 5 },
+      }),
+    );
+
+    const result = await providerWith(fetchFn).chat({
+      system: 'sys',
+      messages: [{ role: 'user', text: 'hi' }],
+      tools,
+    });
+
+    expect(result.message).toEqual({
+      role: 'assistant',
+      text: 'Let me search.',
+      toolCalls: [{ id: 'c1', name: 'search_posts', args: { query: 'x' } }],
+      raw: content,
+    });
+    const body = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(body.tools).toEqual([
+      {
+        functionDeclarations: [
+          {
+            name: 'search_posts',
+            description: 'Search',
+            parametersJsonSchema: tools[0].parameters,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('replays the raw model turn (with its thought signature) and sends matching tool results', async () => {
+    const raw = {
+      role: 'model',
+      parts: [
+        { functionCall: { id: 'c1', name: 'search_posts', args: {} }, thoughtSignature: 'sig' },
+      ],
+    };
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ candidates: [{ content: { parts: [{ text: 'Done' }] } }] }),
+      );
+
+    await providerWith(fetchFn).chat({
+      system: 'sys',
+      tools,
+      messages: [
+        { role: 'user', text: 'hi' },
+        { role: 'assistant', text: '', toolCalls: [], raw },
+        { role: 'tool', results: [{ callId: 'c1', name: 'search_posts', output: ['a'] }] },
+      ],
+    });
+
+    const { contents } = JSON.parse(fetchFn.mock.calls[0][1].body);
+    expect(contents).toEqual([
+      { role: 'user', parts: [{ text: 'hi' }] },
+      raw,
+      {
+        role: 'user',
+        parts: [
+          { functionResponse: { id: 'c1', name: 'search_posts', response: { result: ['a'] } } },
+        ],
+      },
+    ]);
+  });
+
+  it('fails when the reply has neither text nor tool calls', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ candidates: [{ content: { parts: [] }, finishReason: 'STOP' }] }),
+      );
+
+    await expect(
+      providerWith(fetchFn).chat({ system: 's', messages: [{ role: 'user', text: 'hi' }], tools }),
+    ).rejects.toThrow(/no content \(STOP\)/);
+  });
+});

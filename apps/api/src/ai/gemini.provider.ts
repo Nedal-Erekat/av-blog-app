@@ -2,6 +2,9 @@ import {
   AiProviderError,
   EMBEDDING_DIMENSIONS,
   type AiProvider,
+  type ChatMessage,
+  type ChatRequest,
+  type ChatResult,
   type Embedding,
   type EmbeddingDocument,
   type GenerateJsonRequest,
@@ -25,8 +28,17 @@ const QUERY_TASKS: Record<QueryPurpose, string> = {
   'question-answering': 'question answering',
 };
 
+type GeminiPart = {
+  text?: string;
+  // Internal reasoning summaries, not part of the answer.
+  thought?: boolean;
+  functionCall?: { id?: string; name: string; args?: unknown };
+};
+
+type GeminiContent = { role?: string; parts?: GeminiPart[] };
+
 type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+  candidates?: { content?: GeminiContent; finishReason?: string }[];
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
 };
 
@@ -102,6 +114,54 @@ export class GeminiProvider implements AiProvider {
 
     return {
       data,
+      model: this.model,
+      usage: {
+        inputTokens: body.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: body.usageMetadata?.candidatesTokenCount ?? 0,
+      },
+    };
+  }
+
+  async chat({ system, messages, tools }: ChatRequest): Promise<ChatResult> {
+    const body = await this.request<GeminiResponse>(`models/${this.model}:generateContent`, {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: messages.map(toGeminiContent),
+      tools: [
+        {
+          functionDeclarations: tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            parametersJsonSchema: tool.parameters,
+          })),
+        },
+      ],
+    });
+
+    const content = body.candidates?.[0]?.content;
+    const parts = content?.parts ?? [];
+    const text = parts
+      .filter((part) => part.text && !part.thought)
+      .map((part) => part.text)
+      .join('');
+    const toolCalls = parts.flatMap((part) =>
+      part.functionCall
+        ? [
+            {
+              id: part.functionCall.id,
+              name: part.functionCall.name,
+              args: part.functionCall.args ?? {},
+            },
+          ]
+        : [],
+    );
+    if (!text && toolCalls.length === 0) {
+      throw new AiProviderError(
+        `Gemini returned no content (${body.candidates?.[0]?.finishReason ?? 'unknown'})`,
+      );
+    }
+
+    return {
+      message: { role: 'assistant', text, toolCalls, raw: content },
       model: this.model,
       usage: {
         inputTokens: body.usageMetadata?.promptTokenCount ?? 0,
@@ -206,5 +266,38 @@ export class GeminiProvider implements AiProvider {
     }
 
     return { ok: true, body: await res.json() };
+  }
+}
+
+// Our vendor-neutral messages -> Gemini's "contents" format.
+function toGeminiContent(message: ChatMessage): GeminiContent {
+  switch (message.role) {
+    case 'user':
+      return { role: 'user', parts: [{ text: message.text }] };
+    case 'assistant':
+      // Replay Gemini's own reply untouched when we have it (keeps thought signatures intact).
+      return (
+        (message.raw as GeminiContent | undefined) ?? {
+          role: 'model',
+          parts: [
+            ...(message.text ? [{ text: message.text }] : []),
+            ...message.toolCalls.map((call) => ({
+              functionCall: { id: call.id, name: call.name, args: call.args },
+            })),
+          ],
+        }
+      );
+    case 'tool':
+      // Tool results go back as a "user" turn: one functionResponse per call, same id and name.
+      return {
+        role: 'user',
+        parts: message.results.map((result) => ({
+          functionResponse: {
+            ...(result.callId ? { id: result.callId } : {}),
+            name: result.name,
+            response: { result: result.output },
+          },
+        })),
+      } as GeminiContent;
   }
 }
