@@ -2,7 +2,9 @@ import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
+import { WebMcpTools } from '@/components/WebMcpTools';
 import { AuthProvider } from '@/context/AuthContext';
+import { BlogActionsProvider } from '@/context/BlogActionsContext';
 import { getOptionalUser } from '@/lib/dal';
 
 export const metadata: Metadata = {
@@ -18,8 +20,11 @@ async function AuthedApp({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthProvider initialUser={initialUser}>
-      <Navbar />
-      {children}
+      <BlogActionsProvider>
+        <WebMcpTools />
+        <Navbar />
+        {children}
+      </BlogActionsProvider>
     </AuthProvider>
   );
 }
