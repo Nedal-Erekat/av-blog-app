@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   AiProviderError,
   type AiProvider,
@@ -8,10 +9,26 @@ import {
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-};
+// The slice of Gemini's response envelope we read. Validated at runtime instead of cast,
+// so an API change or a malformed reply fails loudly here rather than deep in our code.
+const GeminiResponseSchema = z.object({
+  candidates: z
+    .array(
+      z.object({
+        content: z
+          .object({ parts: z.array(z.object({ text: z.string().optional() })).optional() })
+          .optional(),
+        finishReason: z.string().optional(),
+      }),
+    )
+    .optional(),
+  usageMetadata: z
+    .object({
+      promptTokenCount: z.number().optional(),
+      candidatesTokenCount: z.number().optional(),
+    })
+    .optional(),
+});
 
 type GeminiProviderOptions = {
   apiKey: string;
@@ -21,7 +38,8 @@ type GeminiProviderOptions = {
   fetchFn?: typeof fetch;
 };
 
-// Talks to Gemini's REST API with plain fetch (no SDK), so every part of the request is visible.
+// Talks to Gemini's REST API with plain fetch instead of Google's SDK (@google/genai), so every
+// part of the request is visible and there's no extra dependency.
 export class GeminiProvider implements AiProvider {
   private readonly apiKey: string;
   private readonly model: string;
@@ -74,7 +92,17 @@ export class GeminiProvider implements AiProvider {
       throw new AiProviderError(`Gemini returned HTTP ${res.status}`);
     }
 
-    const body = (await res.json()) as GeminiResponse;
+    let raw: unknown;
+    try {
+      raw = await res.json();
+    } catch {
+      throw new AiProviderError('Gemini returned a non-JSON response');
+    }
+    const parsedBody = GeminiResponseSchema.safeParse(raw);
+    if (!parsedBody.success) {
+      throw new AiProviderError('Gemini returned an unexpected response shape');
+    }
+    const body = parsedBody.data;
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       // e.g. finishReason SAFETY: the model refused and returned no content.
