@@ -7,6 +7,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Optional: without a key the app still runs, and AI features answer 503.
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().min(1).default('gemini-3.8-flash'),
 });
 
 const parsed = envSchema.safeParse(process.env);
