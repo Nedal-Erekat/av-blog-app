@@ -42,4 +42,11 @@ describe('NewPostForm pending drafts', () => {
 
     expect(screen.getByLabelText('Title')).toHaveValue('');
   });
+
+  it('pre-fills the form with a draft handed over by an MCP app (server-side)', () => {
+    render(<NewPostForm initialDraft={draft} />);
+
+    expect(screen.getByLabelText('Title')).toHaveValue('From the command bar');
+    expect(screen.getByLabelText('Category (optional)')).toHaveValue('Culture');
+  });
 });

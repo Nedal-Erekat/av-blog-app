@@ -6,6 +6,9 @@ const envSchema = z.object({
   DIRECT_URL: z.string().url(),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  // This API's own public address. OAuth and MCP clients use it to find the server, so in
+  // production it must be the real https URL (e.g. https://av-blog-app.onrender.com).
+  PUBLIC_API_URL: z.string().url().default('http://localhost:4000'),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // Optional: without a key the app still runs, and AI features answer 503.
   GEMINI_API_KEY: z.string().optional(),
