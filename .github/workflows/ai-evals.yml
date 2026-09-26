@@ -1,0 +1,52 @@
+name: AI evals
+
+# Runs the "Ask the blog" evaluation set against the real model. Manual only (Actions tab →
+# "AI evals" → Run workflow), because each run spends model quota. Needs a GEMINI_API_KEY
+# repository secret (Settings → Secrets and variables → Actions).
+on:
+  workflow_dispatch:
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: av_blog_evals
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/av_blog_evals
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/av_blog_evals
+      JWT_SECRET: ci-evals-secret-not-used-for-auth
+      NODE_ENV: test
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Prepare database (migrate, seed, build the search index)
+        working-directory: apps/api
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+          npm run ai:reindex
+      - name: Run evals
+        run: npm run ai:eval -w apps/api
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: apps/api/evals/results/
