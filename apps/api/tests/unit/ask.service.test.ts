@@ -24,6 +24,7 @@ function fakeProvider(modelOutput: unknown): AiProvider {
     }),
     embedDocuments: jest.fn(),
     embedQuery: jest.fn().mockResolvedValue([0.1, 0.2]),
+    chat: jest.fn(),
   };
 }
 

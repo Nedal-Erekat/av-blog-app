@@ -106,6 +106,7 @@ describe('searchService with real repositories', () => {
       generateJson: jest.fn(),
       embedDocuments: async (docs) => docs.map(() => axis([7, 1])),
       embedQuery: async () => axis([7, 1]),
+      chat: jest.fn(),
     };
     jest.spyOn(console, 'info').mockImplementation(() => undefined);
     const service = createSearchService({ provider });
