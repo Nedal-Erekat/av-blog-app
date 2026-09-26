@@ -10,6 +10,7 @@ const envSchema = z.object({
   // Optional: without a key the app still runs, and AI features answer 503.
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().min(1).default('gemini-3.8-flash'),
+  GEMINI_EMBEDDING_MODEL: z.string().min(1).default('gemini-embedding-2'),
 });
 
 const parsed = envSchema.safeParse(process.env);

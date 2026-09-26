@@ -7,7 +7,7 @@ Full-stack blogging platform built for the Avertra Senior JavaScript Engineer as
 - **Frontend** — Next.js 16 (App Router), React 19, Tailwind, Context API for auth state
 - **Backend** — Express + Prisma REST API, PostgreSQL
 - **Auth** — JWT in an httpOnly cookie
-- **Docs** — [design pattern](docs/design-pattern.md) · [system design](docs/system-design.md) · [AI learning notes](docs/ai-learning/01-first-llm-call.md)
+- **Docs** — [design pattern](docs/design-pattern.md) · [system design](docs/system-design.md) · AI learning notes: [1. first LLM call](docs/ai-learning/01-first-llm-call.md), [2. semantic search](docs/ai-learning/02-embeddings-semantic-search.md)
 
 ## Live demo
 

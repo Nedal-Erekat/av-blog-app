@@ -1,13 +1,18 @@
 import { z } from 'zod';
 import {
   AiProviderError,
+  EMBEDDING_DIMENSIONS,
   type AiProvider,
+  type Embedding,
+  type EmbeddingDocument,
   type GenerateJsonRequest,
   type GenerateJsonResult,
 } from './ai-provider';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_TIMEOUT_MS = 15_000;
+// batchEmbedContents accepts at most 100 texts per call.
+const MAX_EMBED_BATCH = 100;
 
 // The slice of Gemini's response envelope we read. Validated at runtime instead of cast,
 // so an API change or a malformed reply fails loudly here rather than deep in our code.
@@ -30,9 +35,15 @@ const GeminiResponseSchema = z.object({
     .optional(),
 });
 
+// Same idea for batchEmbedContents: validated, not cast.
+const GeminiBatchEmbedResponseSchema = z.object({
+  embeddings: z.array(z.object({ values: z.array(z.number()).optional() })).optional(),
+});
+
 type GeminiProviderOptions = {
   apiKey: string;
   model: string;
+  embeddingModel: string;
   timeoutMs?: number;
   // Injectable so tests can fake the network instead of calling Google.
   fetchFn?: typeof fetch;
@@ -43,66 +54,39 @@ type GeminiProviderOptions = {
 export class GeminiProvider implements AiProvider {
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly embeddingModel: string;
   private readonly timeoutMs: number;
   private readonly fetchFn: typeof fetch;
 
   constructor({
     apiKey,
     model,
+    embeddingModel,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     fetchFn = fetch,
   }: GeminiProviderOptions) {
     this.apiKey = apiKey;
     this.model = model;
+    this.embeddingModel = embeddingModel;
     this.timeoutMs = timeoutMs;
     this.fetchFn = fetchFn;
   }
 
   async generateJson({ system, prompt, schema }: GenerateJsonRequest): Promise<GenerateJsonResult> {
-    let res: Response;
-    try {
-      res = await this.fetchFn(`${GEMINI_BASE_URL}/models/${this.model}:generateContent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // The key goes in a header, never in the URL, so it doesn't end up in request logs.
-          'x-goog-api-key': this.apiKey,
+    const body = await this.request(
+      `models/${this.model}:generateContent`,
+      {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          // Structured output: the model must reply with JSON matching this schema.
+          responseMimeType: 'application/json',
+          responseJsonSchema: schema,
         },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            // Structured output: the model must reply with JSON matching this schema.
-            responseMimeType: 'application/json',
-            responseJsonSchema: schema,
-          },
-        }),
-        // A slow model must not hang our API request forever.
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-    } catch (err) {
-      const reason =
-        err instanceof Error && err.name === 'TimeoutError' ? 'timed out' : 'network error';
-      throw new AiProviderError(`Gemini request failed: ${reason}`);
-    }
+      },
+      GeminiResponseSchema,
+    );
 
-    if (!res.ok) {
-      // 429 = free-tier quota used up; 400/403 = bad request or key. Don't echo the body
-      // to the client: it can contain details we don't want to leak.
-      throw new AiProviderError(`Gemini returned HTTP ${res.status}`);
-    }
-
-    let raw: unknown;
-    try {
-      raw = await res.json();
-    } catch {
-      throw new AiProviderError('Gemini returned a non-JSON response');
-    }
-    const parsedBody = GeminiResponseSchema.safeParse(raw);
-    if (!parsedBody.success) {
-      throw new AiProviderError('Gemini returned an unexpected response shape');
-    }
-    const body = parsedBody.data;
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
       // e.g. finishReason SAFETY: the model refused and returned no content.
@@ -126,5 +110,90 @@ export class GeminiProvider implements AiProvider {
         outputTokens: body.usageMetadata?.candidatesTokenCount ?? 0,
       },
     };
+  }
+
+  // gemini-embedding-2 learns the task from a text prefix: documents are "title: … | text: …",
+  // search queries are "task: search result | query: …".
+  async embedDocuments(documents: EmbeddingDocument[]): Promise<Embedding[]> {
+    const texts = documents.map((doc) => `title: ${doc.title || 'none'} | text: ${doc.text}`);
+    const embeddings: Embedding[] = [];
+    for (let i = 0; i < texts.length; i += MAX_EMBED_BATCH) {
+      // eslint-disable-next-line no-await-in-loop
+      embeddings.push(...(await this.embedBatch(texts.slice(i, i + MAX_EMBED_BATCH))));
+    }
+    return embeddings;
+  }
+
+  async embedQuery(query: string): Promise<Embedding> {
+    const [embedding] = await this.embedBatch([`task: search result | query: ${query}`]);
+    return embedding;
+  }
+
+  private async embedBatch(texts: string[]): Promise<Embedding[]> {
+    if (texts.length === 0) return [];
+
+    const body = await this.request(
+      `models/${this.embeddingModel}:batchEmbedContents`,
+      {
+        requests: texts.map((text) => ({
+          model: `models/${this.embeddingModel}`,
+          content: { parts: [{ text }] },
+          // Ask for 768 numbers instead of the default 3072: 4x less storage, nearly the same quality.
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+        })),
+      },
+      GeminiBatchEmbedResponseSchema,
+    );
+
+    const embeddings = body.embeddings?.map((e) => e.values ?? []) ?? [];
+    // Never trust the response: a wrong count or size would silently corrupt search results.
+    if (
+      embeddings.length !== texts.length ||
+      embeddings.some((values) => values.length !== EMBEDDING_DIMENSIONS)
+    ) {
+      throw new AiProviderError('Gemini returned embeddings of an unexpected shape');
+    }
+    return embeddings;
+  }
+
+  // Every Gemini call goes through here: auth header, timeout, error mapping, and validating
+  // the response against `schema`, in one place.
+  private async request<T>(path: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {
+    let res: Response;
+    try {
+      res = await this.fetchFn(`${GEMINI_BASE_URL}/${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // The key goes in a header, never in the URL, so it doesn't end up in request logs.
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+        // A slow model must not hang our API request forever.
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (err) {
+      const reason =
+        err instanceof Error && err.name === 'TimeoutError' ? 'timed out' : 'network error';
+      throw new AiProviderError(`Gemini request failed: ${reason}`);
+    }
+
+    if (!res.ok) {
+      // 429 = free-tier quota used up; 400/403 = bad request or key. Don't echo the body
+      // to the client: it can contain details we don't want to leak.
+      throw new AiProviderError(`Gemini returned HTTP ${res.status}`);
+    }
+
+    let raw: unknown;
+    try {
+      raw = await res.json();
+    } catch {
+      throw new AiProviderError('Gemini returned a non-JSON response');
+    }
+    const parsed = schema.safeParse(raw);
+    if (!parsed.success) {
+      throw new AiProviderError('Gemini returned an unexpected response shape');
+    }
+    return parsed.data;
   }
 }

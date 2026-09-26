@@ -13,6 +13,16 @@ export function Navbar() {
           Avertra Blog
         </Link>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-indigo-100">
+          {/* A plain GET form: works without JavaScript and makes results shareable (/search?q=...). */}
+          <form action="/search" role="search">
+            <input
+              type="search"
+              name="q"
+              placeholder="Search posts..."
+              aria-label="Search posts"
+              className="w-40 rounded bg-indigo-500 px-2 py-1 text-white placeholder:text-indigo-200 focus:bg-white focus:text-gray-900 focus:outline-none"
+            />
+          </form>
           {loading ? null : user ? (
             <>
               <Link href="/dashboard" className="hover:text-white">

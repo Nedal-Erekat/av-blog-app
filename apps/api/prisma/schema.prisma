@@ -31,10 +31,11 @@ model Post {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author   User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   comments Comment[]
   likes    Like[]
+  chunks   PostChunk[]
 
   @@index([authorId])
   @@index([categoryId])
@@ -70,4 +71,20 @@ model Like {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([postId, userId])
+}
+
+// A slice of a post's text plus its embedding: the "meaning as numbers" used by semantic search.
+// Prisma can't read or write the pgvector type, so this table is accessed with raw SQL
+// (see post-chunk.repository.ts). 768 must match EMBEDDING_DIMENSIONS in src/ai/ai-provider.ts.
+model PostChunk {
+  id         String                     @id
+  postId     String
+  chunkIndex Int
+  content    String
+  embedding  Unsupported("vector(768)")
+  createdAt  DateTime                   @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, chunkIndex])
 }
