@@ -15,9 +15,12 @@ model User {
   name         String
   createdAt    DateTime @default(now())
 
-  posts    Post[]
-  comments Comment[]
-  likes    Like[]
+  posts         Post[]
+  comments      Comment[]
+  likes         Like[]
+  oauthGrants   OAuthGrant[]
+  oauthTokens   OAuthToken[]
+  draftHandoffs DraftHandoff[]
 }
 
 model Post {
@@ -87,4 +90,68 @@ model PostChunk {
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, chunkIndex])
+}
+
+// --- Remote MCP server: OAuth 2.1 (step 7) --------------------------------------------------
+
+// An app (Claude, ChatGPT, ...) that registered itself through OAuth dynamic client registration.
+model OAuthClient {
+  id        String   @id
+  // The full registration (name, redirect URIs, ...) as the client sent it.
+  metadata  Json
+  createdAt DateTime @default(now())
+
+  grants OAuthGrant[]
+  tokens OAuthToken[]
+}
+
+// One "may this app access your blog?" request. Created when the app starts the OAuth flow,
+// approved by the user on the consent page, then exchanged (once) for tokens.
+model OAuthGrant {
+  id            String   @id @default(cuid())
+  clientId      String
+  redirectUri   String
+  codeChallenge String
+  state         String?
+  scopes        String[]
+  resource      String?
+  status        String   @default("pending") // pending | approved | denied | used
+  userId        String?
+  // Only a hash of the authorization code is stored, like a password.
+  codeHash      String?  @unique
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Access and refresh tokens, stored as SHA-256 hashes: a database leak doesn't leak tokens.
+model OAuthToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  kind      String // access | refresh
+  clientId  String
+  userId    String
+  scopes    String[]
+  resource  String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  client OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A draft an AI app prepared, waiting for its owner to review and publish on the website.
+model DraftHandoff {
+  id        String   @id @default(cuid())
+  userId    String
+  draft     Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -4,7 +4,8 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { apiClient, ApiError } from '@/lib/api-client';
-import type { Post, PublicUser } from '@/lib/types';
+import type { CreatePostInput } from '@av-blog/shared';
+import type { OAuthGrantInfo, Post, PublicUser } from '@/lib/types';
 
 /**
  * Data Access Layer.
@@ -45,13 +46,16 @@ export const getOptionalUser = cache(async (): Promise<PublicUser | null> => {
  * A verified session, or a redirect to /login. The token is validated by the
  * API on every call — cookie presence alone is never treated as proof.
  */
-export const verifySession = cache(async (): Promise<{ user: PublicUser; cookieHeader: string }> => {
-  const [user, cookieHeader] = await Promise.all([getOptionalUser(), readAuthCookie()]);
-  if (!user || !cookieHeader) {
-    redirect('/login');
-  }
-  return { user, cookieHeader };
-});
+export const verifySession = cache(
+  async (returnTo?: string): Promise<{ user: PublicUser; cookieHeader: string }> => {
+    const [user, cookieHeader] = await Promise.all([getOptionalUser(), readAuthCookie()]);
+    if (!user || !cookieHeader) {
+      // `returnTo` brings the user back after signing in (e.g. to an OAuth consent page).
+      redirect(returnTo ? `/login?next=${encodeURIComponent(returnTo)}` : '/login');
+    }
+    return { user, cookieHeader };
+  },
+);
 
 /** Posts written by the signed-in user. Requires a session. */
 export const getMyPosts = cache(async (): Promise<Post[]> => {
@@ -117,3 +121,39 @@ export const getLikeStatus = cache(async (postId: string): Promise<boolean> => {
     throw err;
   }
 });
+
+/**
+ * A pending "let this AI app access your blog" request, for the consent page. `null` if it
+ * doesn't exist, expired, or was already answered.
+ */
+export async function getOAuthGrant(grantId: string): Promise<OAuthGrantInfo | null> {
+  const { cookieHeader } = await verifySession(
+    `/oauth/consent?grant=${encodeURIComponent(grantId)}`,
+  );
+  try {
+    return await apiClient.get<OAuthGrantInfo>(`/api/oauth/grants/${encodeURIComponent(grantId)}`, {
+      headers: { Cookie: cookieHeader },
+      cache: 'no-store',
+    });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** A draft an AI app saved for the signed-in user to review. `null` if missing or expired. */
+export async function getDraftHandoff(handoffId: string): Promise<CreatePostInput | null> {
+  const { cookieHeader } = await verifySession(
+    `/posts/new?handoff=${encodeURIComponent(handoffId)}`,
+  );
+  try {
+    const { draft } = await apiClient.get<{ draft: CreatePostInput }>(
+      `/api/draft-handoffs/${encodeURIComponent(handoffId)}`,
+      { headers: { Cookie: cookieHeader }, cache: 'no-store' },
+    );
+    return draft;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}

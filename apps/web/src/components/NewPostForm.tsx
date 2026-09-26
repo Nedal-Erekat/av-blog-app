@@ -10,10 +10,12 @@ import { apiClient } from '@/lib/api-client';
 import { DRAFT_READY_EVENT, takePendingDraft } from '@/lib/pending-draft';
 import type { Post } from '@/lib/types';
 
-export function NewPostForm() {
+export function NewPostForm({ initialDraft }: { initialDraft?: CreatePostInput }) {
   const router = useRouter();
   // Each AI draft gets a new key, so the form re-mounts pre-filled with it.
-  const [draft, setDraft] = useState<{ key: number; values: CreatePostInput } | null>(null);
+  const [draft, setDraft] = useState<{ key: number; values: CreatePostInput } | null>(
+    initialDraft ? { key: 1, values: initialDraft } : null,
+  );
   const showDraft = useCallback(
     (values: CreatePostInput) => setDraft((d) => ({ key: (d?.key ?? 0) + 1, values })),
     [],

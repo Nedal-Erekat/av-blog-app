@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/lib/api-client';
+import { safeNextPath } from '@/lib/safe-next';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -27,7 +28,8 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(result.data);
-      router.push('/');
+      // Back to where the user was headed (e.g. an OAuth consent page), if it's on this site.
+      router.push(safeNextPath(new URLSearchParams(window.location.search).get('next')));
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong');
