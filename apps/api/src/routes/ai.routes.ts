@@ -8,24 +8,14 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware';
 import { rateLimitPerUser } from '../middleware/rate-limit';
 import { validate } from '../middleware/validate';
+import { aiLimits } from '../ai/limits';
 import { aiService } from '../services/ai.service';
 import { askService } from '../services/ask.service';
 import { commandService } from '../services/command.service';
 import { draftAgent } from '../services/draft-agent.service';
 import { asyncHandler } from '../utils/async-handler';
-import { createRateLimiter } from '../utils/rate-limiter';
 
 const router = Router();
-
-// Cost control: every AI request spends free-tier quota (or, on a paid plan, money). These caps
-// stop one user, or one leaked session cookie, from burning through it for everyone.
-const HOUR_MS = 60 * 60 * 1000;
-const summarizeLimiter = createRateLimiter({ limit: 20, windowMs: HOUR_MS });
-const askLimiter = createRateLimiter({ limit: 20, windowMs: HOUR_MS });
-// Lower: one agent run can make up to 8 model calls plus several searches.
-const agentLimiter = createRateLimiter({ limit: 10, windowMs: HOUR_MS });
-// Higher: interpreting a command is a single, small model call.
-const commandLimiter = createRateLimiter({ limit: 60, windowMs: HOUR_MS });
 
 // Logged-in users only: every call costs model quota, so anonymous access would be abuse-prone.
 router.post(
@@ -33,7 +23,7 @@ router.post(
   requireAuth,
   validate(SummarizePostInputSchema),
   // After validation: invalid requests never reach the model, so they shouldn't use up quota.
-  rateLimitPerUser(summarizeLimiter),
+  rateLimitPerUser(aiLimits.summarize),
   asyncHandler(async (req, res) => {
     const suggestion = await aiService.suggestPostMetadata(req.body);
     res.json({ suggestion });
@@ -46,7 +36,7 @@ router.post(
   '/ask',
   requireAuth,
   validate(AskBlogInputSchema),
-  rateLimitPerUser(askLimiter),
+  rateLimitPerUser(aiLimits.ask),
   asyncHandler(async (req, res) => {
     const response = await askService.askBlog(req.body.question);
     res.json(response);
@@ -59,7 +49,7 @@ router.post(
   '/agent/draft',
   requireAuth,
   validate(AgentDraftInputSchema),
-  rateLimitPerUser(agentLimiter),
+  rateLimitPerUser(aiLimits.agent),
   asyncHandler(async (req, res) => {
     const response = await draftAgent.draftPost(req.body.instruction);
     res.json(response);
@@ -72,7 +62,7 @@ router.post(
   '/command',
   requireAuth,
   validate(CommandInputSchema),
-  rateLimitPerUser(commandLimiter),
+  rateLimitPerUser(aiLimits.command),
   asyncHandler(async (req, res) => {
     const response = await commandService.interpret(req.body.text);
     res.json(response);

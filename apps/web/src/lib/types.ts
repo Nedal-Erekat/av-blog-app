@@ -38,3 +38,11 @@ export type SearchResult = {
   // Cosine similarity 0..1 for semantic results; null for keyword matches.
   similarity: number | null;
 };
+
+// What the consent page shows about an AI app asking for access.
+export type OAuthGrantInfo = {
+  clientName: string;
+  clientUri: string | null;
+  redirectHost: string;
+  scopes: string[];
+};
