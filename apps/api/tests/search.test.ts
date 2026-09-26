@@ -159,3 +159,26 @@ describe('POST /api/ai/ask', () => {
     await prisma.user.delete({ where: { email: `ask-${unique}@example.com` } });
   });
 });
+
+describe('POST /api/ai/command', () => {
+  it('requires login', async () => {
+    const res = await request(app)
+      .post('/api/ai/command')
+      .send({ text: 'find posts about design' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('validates the text, then answers 503 when AI is not configured', async () => {
+    const agent = request.agent(app);
+    const email = `command-${unique}@example.com`;
+    await agent.post('/api/auth/register').send({ email, password: 'password123', name: 'Cmd' });
+
+    expect((await agent.post('/api/ai/command').send({ text: 'x' })).status).toBe(400);
+    expect(
+      (await agent.post('/api/ai/command').send({ text: 'find posts about design' })).status,
+    ).toBe(503);
+
+    await prisma.user.delete({ where: { email } });
+  });
+});
