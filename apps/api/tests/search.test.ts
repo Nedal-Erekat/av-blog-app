@@ -81,6 +81,23 @@ describe('postChunkRepository (pgvector)', () => {
   });
 });
 
+describe('postChunkRepository.findNearestChunks (pgvector)', () => {
+  it('returns the closest passages with their post title and slug, best first', async () => {
+    const post = await createPost('RAG source', 'passages');
+    await postChunkRepository.replaceForPost(post.id, [
+      { content: 'far passage', embedding: axis([10, 1]) },
+      { content: 'close passage', embedding: axis([11, 1]) },
+    ]);
+
+    const chunks = await postChunkRepository.findNearestChunks(axis([11, 0.8], [10, 0.6]), 50);
+    const ours = chunks.filter((c) => c.postId === post.id);
+
+    expect(ours.map((c) => c.content)).toEqual(['close passage', 'far passage']);
+    expect(ours[0]).toMatchObject({ title: 'RAG source', slug: post.slug });
+    expect(ours[0].similarity).toBeCloseTo(0.8, 5);
+  });
+});
+
 describe('searchService with real repositories', () => {
   it('finds a post by meaning, end to end', async () => {
     const post = await createPost('Shipping to production', 'We deploy with containers.');
@@ -119,5 +136,25 @@ describe('GET /api/posts/search', () => {
     const res = await request(app).get('/api/posts/search').query({ q: 'a' });
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /api/ai/ask', () => {
+  it('requires login', async () => {
+    const res = await request(app).post('/api/ai/ask').send({ question: 'Why Postgres?' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('validates the question, then answers 503 when AI is not configured', async () => {
+    const agent = request.agent(app);
+    await agent
+      .post('/api/auth/register')
+      .send({ email: `ask-${unique}@example.com`, password: 'password123', name: 'Asker' });
+
+    expect((await agent.post('/api/ai/ask').send({ question: 'x' })).status).toBe(400);
+    expect((await agent.post('/api/ai/ask').send({ question: 'Why Postgres?' })).status).toBe(503);
+
+    await prisma.user.delete({ where: { email: `ask-${unique}@example.com` } });
   });
 });
