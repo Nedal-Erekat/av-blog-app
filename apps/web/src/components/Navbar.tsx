@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { CommandBar } from '@/components/CommandBar';
 import { useAuth } from '@/context/AuthContext';
 
 export function Navbar() {
@@ -25,6 +26,7 @@ export function Navbar() {
           </form>
           {loading ? null : user ? (
             <>
+              <CommandBar />
               <Link href="/ask" className="hover:text-white">
                 Ask the blog
               </Link>

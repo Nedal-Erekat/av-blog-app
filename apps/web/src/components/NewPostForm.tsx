@@ -2,17 +2,34 @@
 
 import type { CreatePostInput } from '@av-blog/shared';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AgentDraftPanel } from '@/components/AgentDraftPanel';
 import { PostForm } from '@/components/PostForm';
 import { revalidatePostsList } from '@/lib/actions';
 import { apiClient } from '@/lib/api-client';
+import { DRAFT_READY_EVENT, takePendingDraft } from '@/lib/pending-draft';
 import type { Post } from '@/lib/types';
 
 export function NewPostForm() {
   const router = useRouter();
   // Each AI draft gets a new key, so the form re-mounts pre-filled with it.
   const [draft, setDraft] = useState<{ key: number; values: CreatePostInput } | null>(null);
+  const showDraft = useCallback(
+    (values: CreatePostInput) => setDraft((d) => ({ key: (d?.key ?? 0) + 1, values })),
+    [],
+  );
+
+  // A draft handed over by the command bar or a WebMCP agent: pick it up on arrival, or live if
+  // this page is already open.
+  useEffect(() => {
+    const pickUp = () => {
+      const pending = takePendingDraft();
+      if (pending) showDraft(pending);
+    };
+    pickUp();
+    window.addEventListener(DRAFT_READY_EVENT, pickUp);
+    return () => window.removeEventListener(DRAFT_READY_EVENT, pickUp);
+  }, [showDraft]);
 
   async function handleSubmit(input: CreatePostInput) {
     const { post } = await apiClient.post<{ post: Post }>('/api/posts', input);
@@ -23,9 +40,7 @@ export function NewPostForm() {
 
   return (
     <div className="space-y-6">
-      <AgentDraftPanel
-        onDraft={(values) => setDraft((d) => ({ key: (d?.key ?? 0) + 1, values }))}
-      />
+      <AgentDraftPanel onDraft={showDraft} />
       <PostForm
         key={draft?.key ?? 0}
         initialValues={
