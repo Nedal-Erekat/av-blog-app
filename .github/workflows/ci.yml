@@ -31,6 +31,18 @@ jobs:
       - run: npm run lint -w apps/web
       - run: npm run typecheck -w apps/web
 
+  specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Spec-driven development: every spec and change proposal must be well-formed.
+      - run: npm run spec:validate
+
   test-api:
     runs-on: ubuntu-latest
     services:
