@@ -128,6 +128,21 @@ describe('GeminiProvider.generateJson', () => {
     await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow(/invalid JSON/);
   });
 
+  it('fails when the response envelope has an unexpected shape', async () => {
+    const fetchFn = jest.fn().mockResolvedValue(jsonResponse({ candidates: 'not-an-array' }));
+
+    await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow(
+      new AiProviderError('Gemini returned an unexpected response shape'),
+    );
+  });
+
+  it('fails when the response body is not JSON', async () => {
+    const fetchFn = jest.fn().mockResolvedValue(new Response('<html>oops</html>', { status: 200 }));
+
+    await expect(providerWith(fetchFn).generateJson(request)).rejects.toThrow(/non-JSON response/);
+    expect(fetchFn).toHaveBeenCalledTimes(1); // a malformed body is not retried
+  });
+
   it('reports a timeout distinctly from other network errors', async () => {
     const timeout = Object.assign(new Error('The operation was aborted due to timeout'), {
       name: 'TimeoutError',
@@ -209,5 +224,15 @@ describe('GeminiProvider embeddings', () => {
       .mockResolvedValue(jsonResponse({ embeddings: [{ values: [1, 2, 3] }] }));
 
     await expect(providerWith(fetchFn).embedQuery('hi')).rejects.toThrow(/unexpected shape/);
+  });
+
+  it('rejects an embedding response of the wrong shape (validated, not cast)', async () => {
+    const fetchFn = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ embeddings: [{ values: ['not', 'numbers'] }] }));
+
+    await expect(providerWith(fetchFn).embedQuery('hi')).rejects.toThrow(
+      new AiProviderError('Gemini returned an unexpected response shape'),
+    );
   });
 });

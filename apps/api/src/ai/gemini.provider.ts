@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   AiProviderError,
   EMBEDDING_DIMENSIONS,
@@ -25,14 +26,31 @@ const QUERY_TASKS: Record<QueryPurpose, string> = {
   'question-answering': 'question answering',
 };
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-};
+// The slice of Gemini's response envelope we read. Validated at runtime instead of cast,
+// so an API change or a malformed reply fails loudly here rather than deep in our code.
+const GeminiResponseSchema = z.object({
+  candidates: z
+    .array(
+      z.object({
+        content: z
+          .object({ parts: z.array(z.object({ text: z.string().optional() })).optional() })
+          .optional(),
+        finishReason: z.string().optional(),
+      }),
+    )
+    .optional(),
+  usageMetadata: z
+    .object({
+      promptTokenCount: z.number().optional(),
+      candidatesTokenCount: z.number().optional(),
+    })
+    .optional(),
+});
 
-type GeminiBatchEmbedResponse = {
-  embeddings?: { values?: number[] }[];
-};
+// Same idea for batchEmbedContents: validated, not cast.
+const GeminiBatchEmbedResponseSchema = z.object({
+  embeddings: z.array(z.object({ values: z.array(z.number()).optional() })).optional(),
+});
 
 type GeminiProviderOptions = {
   apiKey: string;
@@ -46,7 +64,8 @@ type GeminiProviderOptions = {
   fetchFn?: typeof fetch;
 };
 
-// Talks to Gemini's REST API with plain fetch (no SDK), so every part of the request is visible.
+// Talks to Gemini's REST API with plain fetch instead of Google's SDK (@google/genai), so every
+// part of the request is visible and there's no extra dependency.
 export class GeminiProvider implements AiProvider {
   private readonly apiKey: string;
   private readonly model: string;
@@ -75,15 +94,19 @@ export class GeminiProvider implements AiProvider {
   }
 
   async generateJson({ system, prompt, schema }: GenerateJsonRequest): Promise<GenerateJsonResult> {
-    const body = await this.request<GeminiResponse>(`models/${this.model}:generateContent`, {
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        // Structured output: the model must reply with JSON matching this schema.
-        responseMimeType: 'application/json',
-        responseJsonSchema: schema,
+    const body = await this.request(
+      `models/${this.model}:generateContent`,
+      {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          // Structured output: the model must reply with JSON matching this schema.
+          responseMimeType: 'application/json',
+          responseJsonSchema: schema,
+        },
       },
-    });
+      GeminiResponseSchema,
+    );
 
     const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
@@ -130,7 +153,7 @@ export class GeminiProvider implements AiProvider {
   private async embedBatch(texts: string[]): Promise<Embedding[]> {
     if (texts.length === 0) return [];
 
-    const body = await this.request<GeminiBatchEmbedResponse>(
+    const body = await this.request(
       `models/${this.embeddingModel}:batchEmbedContents`,
       {
         requests: texts.map((text) => ({
@@ -140,6 +163,7 @@ export class GeminiProvider implements AiProvider {
           outputDimensionality: EMBEDDING_DIMENSIONS,
         })),
       },
+      GeminiBatchEmbedResponseSchema,
     );
 
     const embeddings = body.embeddings?.map((e) => e.values ?? []) ?? [];
@@ -153,11 +177,18 @@ export class GeminiProvider implements AiProvider {
     return embeddings;
   }
 
-  // Every Gemini call goes through here: auth header, timeout, retries, and error mapping.
-  private async request<T>(path: string, payload: unknown): Promise<T> {
+  // Every Gemini call goes through here: auth header, timeout, retries, error mapping, and
+  // validating the response against `schema`.
+  private async request<T>(path: string, payload: unknown, schema: z.ZodType<T>): Promise<T> {
     for (let attempt = 0; ; attempt += 1) {
       const outcome = await this.attempt(path, payload);
-      if (outcome.ok) return outcome.body as T;
+      if (outcome.ok) {
+        const parsed = schema.safeParse(outcome.body);
+        if (!parsed.success) {
+          throw new AiProviderError('Gemini returned an unexpected response shape');
+        }
+        return parsed.data;
+      }
 
       if (!outcome.retryable || attempt >= this.maxRetries) {
         throw new AiProviderError(outcome.error);
@@ -205,6 +236,11 @@ export class GeminiProvider implements AiProvider {
       };
     }
 
-    return { ok: true, body: await res.json() };
+    try {
+      return { ok: true, body: await res.json() };
+    } catch {
+      // Not retried: a malformed body is unlikely to fix itself on the next attempt.
+      return { ok: false, retryable: false, error: 'Gemini returned a non-JSON response' };
+    }
   }
 }
