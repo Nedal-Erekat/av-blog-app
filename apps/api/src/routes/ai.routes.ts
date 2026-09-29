@@ -1,10 +1,15 @@
-import { AskBlogInputSchema, SummarizePostInputSchema } from '@av-blog/shared';
+import {
+  AgentDraftInputSchema,
+  AskBlogInputSchema,
+  SummarizePostInputSchema,
+} from '@av-blog/shared';
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware';
 import { rateLimitPerUser } from '../middleware/rate-limit';
 import { validate } from '../middleware/validate';
 import { aiService } from '../services/ai.service';
 import { askService } from '../services/ask.service';
+import { draftAgent } from '../services/draft-agent.service';
 import { asyncHandler } from '../utils/async-handler';
 import { createRateLimiter } from '../utils/rate-limiter';
 
@@ -15,6 +20,8 @@ const router = Router();
 const HOUR_MS = 60 * 60 * 1000;
 const summarizeLimiter = createRateLimiter({ limit: 20, windowMs: HOUR_MS });
 const askLimiter = createRateLimiter({ limit: 20, windowMs: HOUR_MS });
+// Lower: one agent run can make up to 8 model calls plus several searches.
+const agentLimiter = createRateLimiter({ limit: 10, windowMs: HOUR_MS });
 
 // Logged-in users only: every call costs model quota, so anonymous access would be abuse-prone.
 router.post(
@@ -38,6 +45,19 @@ router.post(
   rateLimitPerUser(askLimiter),
   asyncHandler(async (req, res) => {
     const response = await askService.askBlog(req.body.question);
+    res.json(response);
+  }),
+);
+
+// The writing assistant agent. It only PROPOSES a draft; the author reviews and publishes it
+// through the normal post form, so a human is always in the loop.
+router.post(
+  '/agent/draft',
+  requireAuth,
+  validate(AgentDraftInputSchema),
+  rateLimitPerUser(agentLimiter),
+  asyncHandler(async (req, res) => {
+    const response = await draftAgent.draftPost(req.body.instruction);
     res.json(response);
   }),
 );

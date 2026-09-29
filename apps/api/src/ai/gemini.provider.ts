@@ -3,6 +3,9 @@ import {
   AiProviderError,
   EMBEDDING_DIMENSIONS,
   type AiProvider,
+  type ChatMessage,
+  type ChatRequest,
+  type ChatResult,
   type Embedding,
   type EmbeddingDocument,
   type GenerateJsonRequest,
@@ -28,15 +31,30 @@ const QUERY_TASKS: Record<QueryPurpose, string> = {
 
 // The slice of Gemini's response envelope we read. Validated at runtime instead of cast,
 // so an API change or a malformed reply fails loudly here rather than deep in our code.
+// `passthrough()` keeps fields we don't read: the model's content is replayed verbatim in the
+// next agent turn, and Gemini rejects it if hidden fields like `thoughtSignature` are dropped.
+const GeminiPartSchema = z
+  .object({
+    text: z.string().optional(),
+    // Internal reasoning summaries, not part of the answer.
+    thought: z.boolean().optional(),
+    functionCall: z
+      .object({ id: z.string().optional(), name: z.string(), args: z.unknown().optional() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const GeminiContentSchema = z
+  .object({ role: z.string().optional(), parts: z.array(GeminiPartSchema).optional() })
+  .passthrough();
+
+type GeminiContent = z.infer<typeof GeminiContentSchema>;
+
 const GeminiResponseSchema = z.object({
   candidates: z
     .array(
-      z.object({
-        content: z
-          .object({ parts: z.array(z.object({ text: z.string().optional() })).optional() })
-          .optional(),
-        finishReason: z.string().optional(),
-      }),
+      z.object({ content: GeminiContentSchema.optional(), finishReason: z.string().optional() }),
     )
     .optional(),
   usageMetadata: z
@@ -125,6 +143,58 @@ export class GeminiProvider implements AiProvider {
 
     return {
       data,
+      model: this.model,
+      usage: {
+        inputTokens: body.usageMetadata?.promptTokenCount ?? 0,
+        outputTokens: body.usageMetadata?.candidatesTokenCount ?? 0,
+      },
+    };
+  }
+
+  async chat({ system, messages, tools }: ChatRequest): Promise<ChatResult> {
+    const body = await this.request(
+      `models/${this.model}:generateContent`,
+      {
+        systemInstruction: { parts: [{ text: system }] },
+        contents: messages.map(toGeminiContent),
+        tools: [
+          {
+            functionDeclarations: tools.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              parametersJsonSchema: tool.parameters,
+            })),
+          },
+        ],
+      },
+      GeminiResponseSchema,
+    );
+
+    const content = body.candidates?.[0]?.content;
+    const parts = content?.parts ?? [];
+    const text = parts
+      .filter((part) => part.text && !part.thought)
+      .map((part) => part.text)
+      .join('');
+    const toolCalls = parts.flatMap((part) =>
+      part.functionCall
+        ? [
+            {
+              id: part.functionCall.id,
+              name: part.functionCall.name,
+              args: part.functionCall.args ?? {},
+            },
+          ]
+        : [],
+    );
+    if (!text && toolCalls.length === 0) {
+      throw new AiProviderError(
+        `Gemini returned no content (${body.candidates?.[0]?.finishReason ?? 'unknown'})`,
+      );
+    }
+
+    return {
+      message: { role: 'assistant', text, toolCalls, raw: content },
       model: this.model,
       usage: {
         inputTokens: body.usageMetadata?.promptTokenCount ?? 0,
@@ -242,5 +312,38 @@ export class GeminiProvider implements AiProvider {
       // Not retried: a malformed body is unlikely to fix itself on the next attempt.
       return { ok: false, retryable: false, error: 'Gemini returned a non-JSON response' };
     }
+  }
+}
+
+// Our vendor-neutral messages -> Gemini's "contents" format.
+function toGeminiContent(message: ChatMessage): GeminiContent {
+  switch (message.role) {
+    case 'user':
+      return { role: 'user', parts: [{ text: message.text }] };
+    case 'assistant':
+      // Replay Gemini's own reply untouched when we have it (keeps thought signatures intact).
+      return (
+        (message.raw as GeminiContent | undefined) ?? {
+          role: 'model',
+          parts: [
+            ...(message.text ? [{ text: message.text }] : []),
+            ...message.toolCalls.map((call) => ({
+              functionCall: { id: call.id, name: call.name, args: call.args },
+            })),
+          ],
+        }
+      );
+    case 'tool':
+      // Tool results go back as a "user" turn: one functionResponse per call, same id and name.
+      return {
+        role: 'user',
+        parts: message.results.map((result) => ({
+          functionResponse: {
+            ...(result.callId ? { id: result.callId } : {}),
+            name: result.name,
+            response: { result: result.output },
+          },
+        })),
+      } as GeminiContent;
   }
 }

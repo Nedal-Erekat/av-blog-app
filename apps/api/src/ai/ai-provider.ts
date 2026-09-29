@@ -40,7 +40,49 @@ export type EmbeddingDocument = {
 // match relevant posts, a question should match passages that contain its answer.
 export type QueryPurpose = 'search' | 'question-answering';
 
+// --- Tool calling (agents) ---------------------------------------------------------------
+// A tool the model may ask us to run. The model never runs anything itself: it replies with
+// "please call search_posts with {query: 'docker'}", our code runs it, and sends back the result.
+export type ToolDefinition = {
+  name: string;
+  description: string;
+  parameters: JsonSchema;
+};
+
+export type ToolCall = {
+  // Some models give each call an id that the result must echo back.
+  id?: string;
+  name: string;
+  args: unknown;
+};
+
+export type ChatMessage =
+  | { role: 'user'; text: string }
+  | {
+      role: 'assistant';
+      text: string;
+      toolCalls: ToolCall[];
+      // The provider's own copy of this reply, replayed verbatim on the next turn. Gemini hides
+      // "thought signatures" in it that must come back unchanged for multi-step tool use.
+      raw?: unknown;
+    }
+  | { role: 'tool'; results: { callId?: string; name: string; output: unknown }[] };
+
+export type ChatRequest = {
+  system: string;
+  messages: ChatMessage[];
+  tools: ToolDefinition[];
+};
+
+export type ChatResult = {
+  message: Extract<ChatMessage, { role: 'assistant' }>;
+  usage: TokenUsage;
+  model: string;
+};
+
 export interface AiProvider {
+  // One turn of a tool-using conversation: the reply is text, tool calls, or both.
+  chat(request: ChatRequest): Promise<ChatResult>;
   generateJson(request: GenerateJsonRequest): Promise<GenerateJsonResult>;
   // Documents and queries are embedded differently on purpose: a short question and a long
   // paragraph that answers it should land close together. See "asymmetric retrieval".

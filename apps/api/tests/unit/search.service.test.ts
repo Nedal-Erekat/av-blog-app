@@ -11,6 +11,7 @@ function fakeProvider(overrides: Partial<AiProvider> = {}): AiProvider {
     generateJson: jest.fn(),
     embedDocuments: jest.fn(async (docs) => docs.map(() => [0.1, 0.2])),
     embedQuery: jest.fn().mockResolvedValue([0.3, 0.4]),
+    chat: jest.fn(),
     ...overrides,
   };
 }

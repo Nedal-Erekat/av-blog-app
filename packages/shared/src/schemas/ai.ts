@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { CreatePostInput } from './post';
 
 // What the web app sends to POST /api/ai/summarize.
 // The content cap is a cost guardrail: every character we send to the model costs tokens.
@@ -48,4 +49,24 @@ export type AskBlogResponse = {
   // Only the posts the answer actually cites (never ones the model made up).
   sources: AskBlogSource[];
   answerable: boolean;
+};
+
+// POST /api/ai/agent/draft — the writing assistant agent.
+export const AgentDraftInputSchema = z.object({
+  instruction: z
+    .string()
+    .trim()
+    .min(10, 'Describe the post you want in a bit more detail')
+    .max(1000),
+});
+export type AgentDraftInput = z.infer<typeof AgentDraftInputSchema>;
+
+// One thing the agent did, shown to the user so its work is transparent.
+export type AgentStep = { tool: string; summary: string; ok: boolean };
+
+export type AgentDraftResponse = {
+  // A proposed post for the author to review and edit. The agent never publishes anything.
+  draft: CreatePostInput | null;
+  message: string;
+  steps: AgentStep[];
 };
