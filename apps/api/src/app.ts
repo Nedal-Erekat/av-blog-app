@@ -3,15 +3,21 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import { env } from './config/env';
 import { prisma } from './lib/prisma';
+import { createMcpRouter } from './mcp/mcp-router';
 import { errorHandler } from './middleware/error-handler';
 import aiRoutes from './routes/ai.routes';
 import authRoutes from './routes/auth.routes';
 import categoryRoutes from './routes/category.routes';
 import { commentsRouter } from './routes/comment.routes';
+import oauthConsentRoutes from './routes/oauth-consent.routes';
 import postRoutes from './routes/post.routes';
 
 export function createApp(): Express {
   const app = express();
+
+  // The remote MCP server and its OAuth endpoints (step 7). Mounted BEFORE the website's CORS and
+  // cookie middleware: MCP clients use Bearer tokens, not cookies, and come from other origins.
+  app.use(express.json(), createMcpRouter());
 
   app.use(
     cors({
@@ -36,6 +42,7 @@ export function createApp(): Express {
   app.use('/api/comments', commentsRouter);
   app.use('/api/categories', categoryRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api', oauthConsentRoutes);
 
   app.use(errorHandler);
 
