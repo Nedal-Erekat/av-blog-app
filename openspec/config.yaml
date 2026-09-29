@@ -1,0 +1,64 @@
+schema: spec-driven
+
+# Project context: shown to the AI whenever it writes a proposal, spec, design or task list.
+# This is the project's "constitution": the rules every change must respect.
+context: |
+  Product: Avertra Blog, a full-stack blogging platform (posts, categories, comments, likes)
+  with AI features: suggested excerpt/category, semantic search, "Ask the blog" (RAG), a
+  writing-assistant agent, an AI command bar + WebMCP tools, and a remote MCP server (OAuth 2.1).
+
+  Tech stack (npm workspaces monorepo):
+  - apps/api: Node 20, Express 4, Prisma 5, PostgreSQL 16 + pgvector, zod, Jest + supertest.
+  - apps/web: Next.js 16 App Router (React 19, cacheComponents), Tailwind, Jest + Testing Library.
+  - packages/shared: zod schemas + types shared by api and web (the API contract).
+  - AI: Google Gemini via REST behind the vendor-neutral AiProvider interface (apps/api/src/ai).
+  - Deploy: web on Vercel, API on Render, Postgres hosted (needs the vector extension).
+
+  Architecture rules:
+  - API layers: routes (HTTP, validation) → services (business rules) → repositories (Prisma).
+    Services are created by factories with injectable dependencies so they can be unit-tested.
+  - Every request body/query is validated with a zod schema from packages/shared.
+  - Web: server components read through lib/dal.ts (authorized reads) or lib/data.ts (cached
+    public reads); client components call the API through lib/api-client.ts.
+  - Auth is a JWT in an httpOnly cookie for the website; the MCP server uses OAuth Bearer tokens.
+  - Errors are AppError subclasses mapped to HTTP status codes by the error handler.
+
+  AI rules (non-negotiable):
+  - Never trust model output: validate it with zod before use. Never trust tool arguments either.
+  - Keep instructions in the system prompt; pass user/post content as escaped, tagged data
+    (escapeUntrusted). Treat blog content as untrusted (indirect prompt injection).
+  - Least privilege: AI features only get the tools/permissions they need. Anything that
+    publishes or changes data needs explicit human confirmation.
+  - AI is optional: without GEMINI_API_KEY the app works and AI endpoints return 503 or degrade.
+  - Every AI entry point is authenticated and rate limited per user (src/ai/limits.ts).
+  - Quality changes to prompts/retrieval are checked with the eval set (npm run ai:eval).
+
+  Quality bar:
+  - Tests for every behavior change (unit tests with fakes; integration tests against real
+    Postgres for SQL, auth and HTTP flows). Run lint, typecheck and tests for both apps.
+  - Security-relevant code (auth, OAuth, ownership checks) needs tests that fail if the check
+    is removed.
+  - Keep changes small and focused; match the surrounding code style and comment density.
+
+rules:
+  proposal:
+    - Include a "Non-goals" section
+    - Name the user who benefits and the problem in one or two sentences
+  specs:
+    - Describe observable behavior (HTTP status codes, what the user sees), not implementation
+    - Cover the unhappy paths (unauthenticated, not owner, not found, invalid input)
+  design:
+    - List affected files by path, following the API layer rules above
+    - Call out security and privacy implications explicitly
+  tasks:
+    - Every task that changes behavior includes the test that proves it
+    - End with a verification task that runs lint, typecheck and tests for both apps
+
+operations:
+  apply:
+    guidance:
+      - Work task by task and tick each checkbox only after its test passes
+      - Stop and ask if the design turns out to be wrong instead of silently deviating
+  archive:
+    guidance:
+      - Confirm all tasks are checked and tests pass before archiving

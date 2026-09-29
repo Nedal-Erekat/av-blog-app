@@ -13,9 +13,12 @@
     "test": "npm run test -w apps/api && npm run test -w apps/web",
     "test:coverage": "npm run test:coverage -w apps/api && npm run test:coverage -w apps/web",
     "build": "npm run build -w packages/shared --if-present && npm run build -w apps/api && npm run build -w apps/web",
-    "postinstall": "npm run build -w packages/shared"
+    "postinstall": "npm run build -w packages/shared",
+    "spec:list": "openspec list",
+    "spec:validate": "openspec validate --all --strict --no-interactive"
   },
   "devDependencies": {
+    "@fission-ai/openspec": "1.13.2",
     "concurrently": "^9.1.0"
   },
   "overrides": {
