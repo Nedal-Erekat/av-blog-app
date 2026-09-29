@@ -9,6 +9,14 @@ function toVectorLiteral(embedding: Embedding): string {
 
 export type NearestPost = { postId: string; similarity: number };
 
+export type NearestChunk = {
+  postId: string;
+  title: string;
+  slug: string;
+  content: string;
+  similarity: number;
+};
+
 // Raw SQL because Prisma doesn't support the vector type. Tagged templates ($executeRaw`...`)
 // still send every ${value} as a bound parameter, so this is safe from SQL injection.
 export const postChunkRepository = {
@@ -33,6 +41,18 @@ export const postChunkRepository = {
       FROM "PostChunk"
       GROUP BY "postId"
       ORDER BY "similarity" DESC
+      LIMIT ${limit}
+    `;
+  },
+
+  // Chunk-level retrieval for RAG: the passages themselves (plus their post), best first.
+  findNearestChunks(queryEmbedding: Embedding, limit: number): Promise<NearestChunk[]> {
+    return prisma.$queryRaw<NearestChunk[]>`
+      SELECT c."postId", p."title", p."slug", c."content",
+             (1 - (c."embedding" <=> ${toVectorLiteral(queryEmbedding)}::vector))::float8 AS "similarity"
+      FROM "PostChunk" c
+      JOIN "Post" p ON p."id" = c."postId"
+      ORDER BY c."embedding" <=> ${toVectorLiteral(queryEmbedding)}::vector
       LIMIT ${limit}
     `;
   },

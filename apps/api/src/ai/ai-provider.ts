@@ -36,12 +36,16 @@ export type EmbeddingDocument = {
   text: string;
 };
 
+// Why a query is being embedded. Models tune the vector to the task: a search query should
+// match relevant posts, a question should match passages that contain its answer.
+export type QueryPurpose = 'search' | 'question-answering';
+
 export interface AiProvider {
   generateJson(request: GenerateJsonRequest): Promise<GenerateJsonResult>;
   // Documents and queries are embedded differently on purpose: a short question and a long
   // paragraph that answers it should land close together. See "asymmetric retrieval".
   embedDocuments(documents: EmbeddingDocument[]): Promise<Embedding[]>;
-  embedQuery(query: string): Promise<Embedding>;
+  embedQuery(query: string, purpose?: QueryPurpose): Promise<Embedding>;
 }
 
 // Thrown for anything that goes wrong talking to the model: network, timeout, quota, bad output.

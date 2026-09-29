@@ -25,3 +25,27 @@ export type SearchPostsQuery = z.infer<typeof SearchPostsQuerySchema>;
 // "semantic" = matched by meaning (embeddings); "keyword" = plain text match, used as a
 // fallback when the AI is not configured or unavailable.
 export type SearchMode = 'semantic' | 'keyword';
+
+// POST /api/ai/ask — "Ask the blog" (RAG).
+export const AskBlogInputSchema = z.object({
+  question: z.string().trim().min(3, 'Ask a slightly longer question').max(500),
+});
+export type AskBlogInput = z.infer<typeof AskBlogInputSchema>;
+
+// What the model must return. `citedSourceIds` refer to the numbered sources we gave it;
+// `answerable` is false when the sources don't contain the answer.
+export const AskBlogModelOutputSchema = z.object({
+  answer: z.string().min(1).max(2000),
+  citedSourceIds: z.array(z.number().int()),
+  answerable: z.boolean(),
+});
+export type AskBlogModelOutput = z.infer<typeof AskBlogModelOutputSchema>;
+
+export type AskBlogSource = { postId: string; title: string; slug: string };
+
+export type AskBlogResponse = {
+  answer: string;
+  // Only the posts the answer actually cites (never ones the model made up).
+  sources: AskBlogSource[];
+  answerable: boolean;
+};

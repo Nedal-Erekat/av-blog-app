@@ -25,6 +25,9 @@ export function Navbar() {
           </form>
           {loading ? null : user ? (
             <>
+              <Link href="/ask" className="hover:text-white">
+                Ask the blog
+              </Link>
               <Link href="/dashboard" className="hover:text-white">
                 My Posts
               </Link>

@@ -7,12 +7,18 @@ import {
   type EmbeddingDocument,
   type GenerateJsonRequest,
   type GenerateJsonResult,
+  type QueryPurpose,
 } from './ai-provider';
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_TIMEOUT_MS = 15_000;
 // batchEmbedContents accepts at most 100 texts per call.
 const MAX_EMBED_BATCH = 100;
+// gemini-embedding-2's task prefixes for queries.
+const QUERY_TASKS: Record<QueryPurpose, string> = {
+  search: 'search result',
+  'question-answering': 'question answering',
+};
 
 // The slice of Gemini's response envelope we read. Validated at runtime instead of cast,
 // so an API change or a malformed reply fails loudly here rather than deep in our code.
@@ -113,7 +119,7 @@ export class GeminiProvider implements AiProvider {
   }
 
   // gemini-embedding-2 learns the task from a text prefix: documents are "title: … | text: …",
-  // search queries are "task: search result | query: …".
+  // queries are "task: <task> | query: …".
   async embedDocuments(documents: EmbeddingDocument[]): Promise<Embedding[]> {
     const texts = documents.map((doc) => `title: ${doc.title || 'none'} | text: ${doc.text}`);
     const embeddings: Embedding[] = [];
@@ -124,8 +130,8 @@ export class GeminiProvider implements AiProvider {
     return embeddings;
   }
 
-  async embedQuery(query: string): Promise<Embedding> {
-    const [embedding] = await this.embedBatch([`task: search result | query: ${query}`]);
+  async embedQuery(query: string, purpose: QueryPurpose = 'search'): Promise<Embedding> {
+    const [embedding] = await this.embedBatch([`task: ${QUERY_TASKS[purpose]} | query: ${query}`]);
     return embedding;
   }
 
