@@ -25,7 +25,8 @@ export function createApp(): Express {
     try {
       await prisma.$queryRaw`SELECT 1`;
       res.json({ status: 'ok', db: 'connected' });
-    } catch {
+    } catch (err) {
+      console.error('Health check: database query failed', err);
       res.status(503).json({ status: 'error', db: 'unreachable' });
     }
   });
