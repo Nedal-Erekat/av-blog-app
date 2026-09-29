@@ -15,7 +15,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed",
-    "ai:reindex": "tsx src/scripts/reindex-posts.ts"
+    "ai:reindex": "tsx src/scripts/reindex-posts.ts",
+    "ai:eval": "tsx src/scripts/run-evals.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -4,6 +4,7 @@ import {
   type SummarizePostInput,
 } from '@av-blog/shared';
 import { AiProviderError, createAiProvider, type AiProvider, type JsonSchema } from '../ai';
+import { escapeUntrusted } from '../ai/prompt-safety';
 import { ServiceUnavailableError } from '../errors';
 
 // Instructions live here, on our side, and never contain user text.
@@ -35,8 +36,9 @@ export function createAiService(provider: AiProvider | null = createAiProvider()
       }
 
       // The post goes in the user message, wrapped in tags, so the model can tell
-      // "content to work on" apart from "instructions to follow".
-      const prompt = `<post>\n<title>${input.title}</title>\n<content>\n${input.content}\n</content>\n</post>`;
+      // "content to work on" apart from "instructions to follow". Escaping stops the post
+      // from closing those tags itself.
+      const prompt = `<post>\n<title>${escapeUntrusted(input.title)}</title>\n<content>\n${escapeUntrusted(input.content)}\n</content>\n</post>`;
 
       try {
         const result = await provider.generateJson({

@@ -2,6 +2,7 @@ import { AiProviderError, type AiProvider } from '../../src/ai';
 import type { PostChunkRepository } from '../../src/repositories/post-chunk.repository';
 import type { PostRepository } from '../../src/repositories/post.repository';
 import { createSearchService, MIN_SIMILARITY } from '../../src/services/search.service';
+import { createRateLimiter } from '../../src/utils/rate-limiter';
 
 const post = (id: string) => ({ id, title: `Post ${id}` });
 
@@ -79,6 +80,20 @@ describe('searchService.searchPosts', () => {
 
     expect(mode).toBe('keyword');
     expect(results).toEqual([{ post: post('kw'), similarity: null }]);
+  });
+
+  it('degrades to keyword search (no embedding call) once the semantic search cap is reached', async () => {
+    const provider = fakeProvider();
+    const service = createSearchService({
+      provider,
+      chunkRepository: fakeChunkRepository(),
+      postRepository: fakePostRepository(),
+      semanticLimiter: createRateLimiter({ limit: 1, windowMs: 60_000 }),
+    });
+
+    expect((await service.searchPosts('first')).mode).toBe('semantic');
+    expect((await service.searchPosts('second')).mode).toBe('keyword');
+    expect(provider.embedQuery).toHaveBeenCalledTimes(1);
   });
 
   it('uses keyword search when no AI provider is configured', async () => {
