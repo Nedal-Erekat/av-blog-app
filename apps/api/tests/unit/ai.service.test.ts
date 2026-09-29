@@ -16,6 +16,8 @@ function fakeProvider(data: unknown): AiProvider {
         model: 'fake-model',
         usage: { inputTokens: 10, outputTokens: 5 },
       }),
+    embedDocuments: jest.fn(),
+    embedQuery: jest.fn(),
   };
 }
 
@@ -60,6 +62,8 @@ describe('aiService.suggestPostMetadata', () => {
   it('turns provider failures into a friendly 503', async () => {
     const provider: AiProvider = {
       generateJson: jest.fn().mockRejectedValue(new AiProviderError('Gemini returned HTTP 429')),
+      embedDocuments: jest.fn(),
+      embedQuery: jest.fn(),
     };
 
     const error = await createAiService(provider)

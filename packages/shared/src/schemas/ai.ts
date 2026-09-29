@@ -15,3 +15,13 @@ export const PostSuggestionSchema = z.object({
   category: z.string().min(1).max(50),
 });
 export type PostSuggestion = z.infer<typeof PostSuggestionSchema>;
+
+// GET /api/posts/search?q=... A length cap keeps each query cheap to embed.
+export const SearchPostsQuerySchema = z.object({
+  q: z.string().trim().min(2, 'Search for at least 2 characters').max(200),
+});
+export type SearchPostsQuery = z.infer<typeof SearchPostsQuerySchema>;
+
+// "semantic" = matched by meaning (embeddings); "keyword" = plain text match, used as a
+// fallback when the AI is not configured or unavailable.
+export type SearchMode = 'semantic' | 'keyword';

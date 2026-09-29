@@ -6,7 +6,11 @@ import { GeminiProvider } from './gemini.provider';
 // Returns null when no key is configured, so AI features can be switched off cleanly.
 export function createAiProvider(): AiProvider | null {
   if (!env.GEMINI_API_KEY) return null;
-  return new GeminiProvider({ apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL });
+  return new GeminiProvider({
+    apiKey: env.GEMINI_API_KEY,
+    model: env.GEMINI_MODEL,
+    embeddingModel: env.GEMINI_EMBEDDING_MODEL,
+  });
 }
 
 export * from './ai-provider';

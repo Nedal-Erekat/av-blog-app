@@ -14,7 +14,8 @@
     "postinstall": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "ai:reindex": "tsx src/scripts/reindex-posts.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

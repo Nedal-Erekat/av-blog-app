@@ -32,3 +32,9 @@ export type Post = {
   category: Category | null;
   _count: { comments: number; likes: number };
 };
+
+export type SearchResult = {
+  post: Post;
+  // Cosine similarity 0..1 for semantic results; null for keyword matches.
+  similarity: number | null;
+};

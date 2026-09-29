@@ -23,4 +23,16 @@ describe('PostCard', () => {
     expect(link).toHaveAttribute('href', '/posts/hello-world');
     expect(screen.getByText('A short excerpt.')).toBeInTheDocument();
   });
+
+  it('shows the match percentage for semantic search results', () => {
+    render(<PostCard post={post} similarity={0.873} />);
+
+    expect(screen.getByText(/87% match/)).toBeInTheDocument();
+  });
+
+  it('shows no match percentage outside search', () => {
+    render(<PostCard post={post} />);
+
+    expect(screen.queryByText(/% match/)).not.toBeInTheDocument();
+  });
 });
